@@ -105,9 +105,11 @@ void KVI2::TreateSignal()
    if (!TestWidth())
       ChangeChannelWidth(GetChannelWidth());
 
-   FIR_ApplyMovingAverage(4);
+//   FIR_ApplyMovingAverage(4);
 
    Add(-1.*ComputeBaseLine());
+   ApplyModifications();
+
    if (fWithInterpolation) {
       BuildSmoothingSplineSignal();
       SetNSamples(GetNSamples() - 5 * (fChannelWidth / fInterpolatedChannelWidth)); // because we use a 3th order interpolation...

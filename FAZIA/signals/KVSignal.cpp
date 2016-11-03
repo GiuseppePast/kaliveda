@@ -1080,6 +1080,7 @@ void KVSignal::BuildSmoothingSplineSignal(double taufinal, double l, int nbits)
    for (int i = 0; i < nlast; i++) fAdc.AddAt(interpo.At(i), i);
    for (int i = nlast; i < interpo.GetSize(); i++) fAdc.AddAt(interpo.At(nlast), i);
 
+   delete coeff;
 }
 /***********************************************/
 void KVSignal::BuildSmoothingSplineSignal()
@@ -1131,7 +1132,7 @@ int KVSignal::FIR_ApplySmoothingSpline(double l, int nbits)
       imax = ((nbits + 1) * log(2) + log(roB)) / log(roZ) - 1.;
       nmax = floor(imax);
       do {
-         fmax = abs(-2 * roB * cos(phib - (nmax + 1) * phiz) / pow(roZ, nmax + 1));
+         fmax = std::abs(-2 * roB * cos(phib - (nmax + 1) * phiz) / pow(roZ, nmax + 1));
          if (fmax * pow(2, nfloat + 1) < 1) nmax--;
       } while (fmax * pow(2, nfloat + 1) < 1);
    } else nmax = 50;
