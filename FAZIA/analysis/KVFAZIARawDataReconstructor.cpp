@@ -143,7 +143,6 @@ void KVFAZIARawDataReconstructor::ExtraProcessing()
                }
             }
             if (!sig->PSAHasBeenComputed()) {
-               printf("*******si ci passo\n");
                sig->TreateSignal();
             }
 

@@ -1153,7 +1153,7 @@ void KVSignal::BuildSmoothingSplineSignal(double taufinal, double l, int nbits)
    for (int i = 0; i < nlast; i++) fAdc.AddAt(interpo.At(i), i);
    for (int i = nlast; i < interpo.GetSize(); i++) fAdc.AddAt(interpo.At(nlast), i);
 
-   delete coeff;
+//   delete coeff;
 }
 /***********************************************/
 void KVSignal::BuildSmoothingSplineSignal()
