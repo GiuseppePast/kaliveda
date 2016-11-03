@@ -93,7 +93,7 @@ Double_t KVIDHarpeeICSi_e503::GetIDMapY(Option_t* opt)
    // grid then zero is returned. The found ID grid is loaded in the pointer
    // fGrid to be used in the method Identify.
 
-   UNUSED(opt);
+   IGNORE_UNUSED(opt);
 
    fGrid = NULL;
    Double_t E   = 0;
@@ -166,7 +166,14 @@ Bool_t KVIDHarpeeICSi_e503::Identify(
    // identification with some additional logic checks.
 
    assert(idr);
-   if (!kInitialised_) Init();
+
+   //IMPORTANT !!! For the moment we need to reset the kInitialised flag
+   //each time the Identify method is called.
+   //Else each time the same KVIDHarpeeICSi_e503 is called (for ex: VID_CHI_SI_05) more
+   //than once (typically in a KVIVSelector), it will be considered as already initialised and
+   //the base_id_result_ will keep the information of the former identification !!!
+   kInitialised_ = kFALSE;
+   Init();
 
    idr->IDOK = kFALSE;
    idr->IDattempted = kTRUE;
@@ -188,6 +195,9 @@ Bool_t KVIDHarpeeICSi_e503::Identify(
    // before the initialisation check as that is only applicable to the derived
    // class.  This way we will store the data from the base class
    // identification even if the derived class initialisation fails.
+
+   //Only Z identification will be performed as A will be obtained from VAMOS
+   SetOnlyZId(kTRUE);
 
    Bool_t status = KVIDHarpeeICSi::Identify(idr, x, y);
 

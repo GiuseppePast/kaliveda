@@ -12,7 +12,7 @@ protected:
    Bool_t NewFunction_1D();
 
 public:
-   KVGaus1D();
+   KVGaus1D(Bool_t batch = kFALSE);
    KVGaus1D(const KVGaus1D&) ;
    virtual ~KVGaus1D();
 

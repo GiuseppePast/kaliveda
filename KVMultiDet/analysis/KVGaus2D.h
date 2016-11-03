@@ -17,7 +17,7 @@ protected:
 
 public:
 
-   KVGaus2D();
+   KVGaus2D(Bool_t batch = kFALSE);
    KVGaus2D(const KVGaus2D&) ;
    virtual ~KVGaus2D();
 

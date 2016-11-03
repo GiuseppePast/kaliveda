@@ -18,7 +18,7 @@
 #ifndef KV_INDRADB_H
 #define KV_INDRADB_H
 
-#include "KVDataBase.h"
+#include "KVExpDB.h"
 #include "KVDataSet.h"
 #include "KVINDRADBRun.h"
 #include "KVDBSystem.h"
@@ -35,7 +35,7 @@
 
 class KVNumberList;
 
-class KVINDRADB: public KVDataBase, public KVINDRARunListReader {
+class KVINDRADB: public KVExpDB, public KVINDRARunListReader {
 
 private:
 
@@ -43,15 +43,8 @@ private:
 
 protected:
 
-   Bool_t OpenCalibFile(const Char_t* type, std::ifstream& fs) const;
-
    //General information
 
-   Int_t kFirstRun;
-   Int_t kLastRun;
-
-   KVDBTable* fRuns;            //-> table of runs
-   KVDBTable* fSystems;         //-> table of systems
    KVDBTable* fChIoPressures;   //-> table of chio pressures
    KVDBTable* fGains;           //(optional) table of detector gains, in case they change from run to run
    KVDBTable* fTapes;           //-> table of data tapes
@@ -67,17 +60,6 @@ protected:
 
    KVINDRAPulserDataTree* fPulserData;  //! mean values of pulsers for all detectors & runs
 
-   virtual void LinkListToRunRanges(TList* list, UInt_t rr_number,
-                                    UInt_t run_ranges[][2]);
-   virtual void LinkRecordToRunRanges(KVDBRecord* rec, UInt_t rr_number,
-                                      UInt_t run_ranges[][2]);
-   virtual void LinkRecordToRunRange(KVDBRecord* rec, UInt_t first_run,
-                                     UInt_t last_run);
-   virtual void LinkListToRunRange(TList* list, KVNumberList nl);
-   virtual void LinkRecordToRunRange(KVDBRecord* rec,  KVNumberList nl);
-   virtual void LinkRecordToRun(KVDBRecord* rec,  Int_t run);
-
-   virtual void ReadSystemList();
    virtual void ReadGainList();
    virtual void ReadChIoPressures();
    virtual void ReadCsITotalLightGainCorrections();
@@ -108,32 +90,27 @@ public:
    virtual ~ KVINDRADB();
 
    virtual void Build();
-   virtual void GoodRunLine();
+   virtual void cd();
 
-   void AddRun(KVDBRun* r)
-   {
-      fRuns->AddRecord(r);
-   };
    void AddTape(KVDBTape* r)
    {
       fTapes->AddRecord(r);
-   };
-   void AddSystem(KVDBSystem* r)
+   }
+   virtual KVDBTape* GetTape(Int_t tape) const
    {
-      fSystems->AddRecord(r);
-   };
+      return (KVDBTape*) fTapes->GetRecord(tape);
+   }
+   virtual KVSeqCollection* GetTapes() const
+   {
+      return fTapes->GetRecords();
+   }
 
-   virtual void Save(const Char_t*);
-
-   KVINDRADBRun* GetRun(Int_t run) const;
-//   KVINDRADBRun *GetRun(const Char_t * run) const;
-
-   virtual KVSeqCollection* GetRuns() const;
-   virtual KVDBSystem* GetSystem(const Char_t* system) const;
-   virtual KVSeqCollection* GetSystems() const;
-
-   virtual KVDBTape* GetTape(Int_t tape) const;
-   virtual KVSeqCollection* GetTapes() const;
+   virtual void GoodRunLine();
+   KVINDRADBRun* GetRun(Int_t run) const
+   {
+      return (KVINDRADBRun*) GetDBRun(run);
+   }
+   void ReadNewRunList();
 
    KVList* GetCalibrationPeaks(Int_t run, KVDetector* detector = 0,
                                Int_t peak_type = -1, Int_t signal_type = 0,
@@ -163,77 +140,19 @@ public:
                                  Double_t Coul_par_top = 1.e-10) const;
    Double_t GetTotalCrossSection(TH1* events_histo, Double_t Q_apres_cible, Double_t Coul_par_top = 1.e-10);
 
-   void WriteRunListFile() const;
-   void ReadNewRunList();
-   void WriteSystemsFile() const;
-
-   const Char_t* GetDBEnv(const Char_t* type) const;
-   const Char_t* GetCalibFileName(const Char_t* type) const
-   {
-      return GetDBEnv(type);
-   };
-
-   inline virtual void cd();
-   virtual void WriteObjects(TFile*);
-   virtual void ReadObjects(TFile*);
 
    KVINDRAPulserDataTree* GetPulserData()
    {
       return fPulserData;
    };
+   virtual const Char_t* GetDBEnv(const Char_t* type) const;
+   virtual void WriteObjects(TFile*);
+   virtual void ReadObjects(TFile*);
 
-   virtual void PrintRuns(KVNumberList&) const;
-
-   ClassDef(KVINDRADB, 4)       //DataBase of parameters for an INDRA campaign
+   ClassDef(KVINDRADB, 5)       //DataBase of parameters for an INDRA campaign
 };
 
 //........ global variable
 R__EXTERN KVINDRADB* gIndraDB;
-
-//.............inline functions
-
-inline void KVINDRADB::cd()
-{
-   KVDataBase::cd();
-   gIndraDB = this;
-}
-
-inline KVSeqCollection* KVINDRADB::GetRuns() const
-{
-   return fRuns->GetRecords();
-}
-
-inline KVDBSystem* KVINDRADB::GetSystem(const Char_t* system) const
-{
-   return (KVDBSystem*) fSystems->GetRecord(system);
-}
-
-inline KVSeqCollection* KVINDRADB::GetSystems() const
-{
-   return fSystems->GetRecords();
-}
-
-inline KVDBTape* KVINDRADB::GetTape(Int_t tape) const
-{
-   return (KVDBTape*) fTapes->GetRecord(tape);
-}
-
-inline KVSeqCollection* KVINDRADB::GetTapes() const
-{
-   return fTapes->GetRecords();
-}
-
-
-inline KVINDRADBRun* KVINDRADB::GetRun(Int_t run) const
-{
-   //Returns KVINDRADBRun describing run number 'run'
-   return (KVINDRADBRun*) fRuns->GetRecord(run);
-}
-
-//inline KVINDRADBRun *KVINDRADB::GetRun(const Char_t * run) const
-//{
-//   //Returns KVINDRADBRun describing run with name "run"
-//   return (KVINDRADBRun *) GetRuns()->FindObject(run);
-//}
 
 #endif

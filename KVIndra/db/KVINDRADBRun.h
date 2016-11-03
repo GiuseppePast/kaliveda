@@ -28,15 +28,6 @@ public:
    {
       return Get("Dead time (%)");
    };
-   Int_t GetTrigger() const
-   {
-      return GetScaler("Trigger multiplicity");
-   };
-   const Char_t* GetTriggerString() const
-   {
-      if (GetTrigger() > 0) return Form("M>=%d", GetTrigger());
-      else return Form("xxx");
-   };
    const Char_t* GetCahier() const
    {
       return GetString("Logbook");
@@ -50,10 +41,7 @@ public:
    {
       Set("Dead time (%)", tmp);
    };
-   void SetTrigger(Int_t trig)
-   {
-      SetScaler("Trigger multiplicity", trig);
-   };
+
    void SetCahier(const Char_t* log)
    {
       SetLogbook(log);

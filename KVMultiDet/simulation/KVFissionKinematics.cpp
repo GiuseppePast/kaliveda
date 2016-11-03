@@ -45,7 +45,7 @@ const KVEvent* KVFissionKinematics::Generate()
    (ff1 = fFission.AddParticle())->SetZandA(fDaughter.GetZ(), fDaughter.GetA());
    (ff2 = fFission.AddParticle())->SetZandA(fMother.GetZ() - fDaughter.GetZ(), fMother.GetA() - fDaughter.GetA());
 
-   Double_t vrel = ff1->GetViolaVelocity(ff2);
+   Double_t vrel = ff1->GetFissionVelocity(ff2);
    Double_t mu   = ff1->GetMass() * ff2->GetMass() / (ff1->GetMass() + ff2->GetMass());
 
    KVPosition pp(0, 180, 0, 360);

@@ -28,7 +28,7 @@ protected:
    TH1* hfit;           //histogramme analyse
    TH1* hclone;         //clone de histogramme analyse
    TCanvas* c1;         //Canvas ou est trace l histo a analyse
-
+   Bool_t fBatch;       //set if graphical objects are used or not
 
    Bool_t XminSet, XmaxSet; //Indique que l intervalle du fit est defini
    Double_t Xmin, Xmax; //Borne en X du fit
@@ -68,6 +68,7 @@ public:
    Bool_t is2D;         //histogramme analyse herite de TH1 ou TH2
 
    KVAutoFit();
+   KVAutoFit(Bool_t batch);
    KVAutoFit(const KVAutoFit&) ;
    virtual ~KVAutoFit();
    void Copy(TObject&) const;

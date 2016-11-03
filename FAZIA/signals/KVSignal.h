@@ -27,15 +27,11 @@ public:
 
 protected:
    Int_t fIndex;        //!index deduced from block, quartet and telescope numbering
-   Int_t fBlock;
-   Int_t fQuartet;
-   TString fQuartetName;
-   Int_t fTelescope;
-   Int_t fChannel;                 //! signal type (see KVSignal::SignalType enum)
-   TString fTelName;
-   TString fDetName;
-   TString fType;
-   TString fDet;
+   Int_t fChannel;      //! signal type (see KVSignal::SignalType enum)
+
+   TString fDetName;    //name of the detector, the signal is linked to, needed to find it in the KVMultiDetector
+   TString fType;       //string to identify the signal type : "QH1", "I2" etc ...
+
    Int_t fFPGAOutputNumbers;  //!ASsociated FPGA energy outputs
 
    TArrayF fAdc;                    //! needed to use the psa methods copied from FClasses of Firenze
@@ -73,6 +69,7 @@ protected:
    virtual void BuildCubicSplineSignal(); //Interpolazione mediante cubic spline
    virtual void BuildSmoothingSplineSignal(); //Interpolazione mediante cubic spline
    void init();
+   void TreateOldSignalName();
 
 public:
    KVSignal();
@@ -84,16 +81,15 @@ public:
    //
    //routines to link signal to its detector in kaliveda framework
    //
-   void SetDetectorName(const Char_t* detname);
    const Char_t* GetDetectorName()  const
    {
       return fDetName.Data();
    }
-   void SetDetector(const Char_t* det);
-   const Char_t* GetDetector()      const
+   void SetDetectorName(const Char_t* name)
    {
-      return fDet.Data();
+      fDetName = name;
    }
+
    void SetType(const Char_t* type)
    {
       fType = type;
@@ -108,26 +104,7 @@ public:
    {
       return fIndex;
    }
-   Int_t GetBlockNumber()           const
-   {
-      return fBlock;
-   }
-   Int_t GetQuartetNumber()         const
-   {
-      return fQuartet;
-   }
-   const Char_t* GetQuartetName()   const
-   {
-      return fQuartetName.Data();
-   }
-   Int_t GetTelescopeNumber()       const
-   {
-      return fTelescope;
-   }
-   const Char_t* GetTelescopeName() const
-   {
-      return fTelName.Data();
-   }
+
    virtual Bool_t IsCharge() const
    {
       return kFALSE;
@@ -366,10 +343,13 @@ public:
    }
 
    // compute mean value and rms of a subset of samples
-   double FindMedia(double tsta, double tsto);
-   double FindMedia(int tsta, int tsto);
-   double FindSigma2(double tsta, double tsto);
-   double FindSigma2(int tsta, int tsto);
+   Bool_t ComputeMeanAndSigma(Int_t start, Int_t stop, Double_t& mean, Double_t& sigma);
+   Bool_t ComputeMeanAndSigma(Double_t start, Double_t stop, Double_t& mean, Double_t& sigma);
+
+//    double FindMedia(double tsta, double tsto);
+//    double FindMedia(int tsta, int tsto);
+//    double FindSigma2(double tsta, double tsto);
+//    double FindSigma2(int tsta, int tsto);
 
    // multiply the signal  (modify only fAdc)
    void Multiply(Double_t fact);
@@ -418,7 +398,8 @@ public:
    void ShiftRight(double);//shift in ns
    void TestDraw();
 
-   ClassDef(KVSignal, 3) //Base class for FAZIA signal processing
+   ClassDef(KVSignal, 4) //Base class for FAZIA signal processing
+
 };
 
 #endif

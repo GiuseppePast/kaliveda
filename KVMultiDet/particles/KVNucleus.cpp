@@ -933,7 +933,7 @@ Double_t KVNucleus::GetBindingEnergyPerNucleon(Int_t z, Int_t a) const
 }
 //________________________________________________________________________________________
 
-Double_t KVNucleus::GetEnergyPerNucleon()
+Double_t KVNucleus::GetEnergyPerNucleon() const
 {
    //
    //Returns kinetic energy of nucleus per nucleon (in MeV/nucleon, donc)
@@ -943,7 +943,7 @@ Double_t KVNucleus::GetEnergyPerNucleon()
 
 //________________________________________________________________________________________
 
-Double_t KVNucleus::GetAMeV()
+Double_t KVNucleus::GetAMeV() const
 {
    //
    //Returns kinetic energy of nucleus per nucleon (in MeV/nucleon, donc)
@@ -1238,62 +1238,125 @@ Double_t KVNucleus::GetRelativeVelocity(KVNucleus* nuc)
    return (GetVelocity() - nuc->GetVelocity()).Mag();
 }
 
-Double_t KVNucleus::GetViolaVelocity(KVNucleus* nuc, Int_t formula)
+Double_t KVNucleus::GetFissionTKE(KVNucleus* nuc, Int_t formula)
 {
-   // Relative velocity expected for fission from the Viola systematics (in cm/ns).
-   // If nuc=0, this method returns the relative velocity expected for the symetric fission of this nucleus.
-   // Else, it returns the expected relative velocity considering that nuc and the current nucleus arise
-   // from the fisison of a compound nucleus.
-   // - kDefaultFormula:
-   //   - if nuc=0 : kViola1985
-   //   - else     : kHinde1987
-   // - kHinde1987: D. Hinde, J. Leigh, J. Bokhorst, J. Newton, R. Walsh, and J. Boldeman, Nuclear Physics A 472, 318 (1987).
+   // Average or most probable Total Kinetic Energy [MeV] expected for fission based on various systematics
+   // for fission of highly-excited nuclei produced in heavy-ion reactions.
+   // If nuc=0, this method returns the TKE for symmetric fission of this nucleus.
+   // Else, it returns the expected TKE considering that nuc and the current nucleus arise
+   // from the fisson of a compound nucleus.
+   // - kItkis1998: M.G. Itkis & A. Ya. Rusanov, Phys. Part. Nucl. 29, 160 (1998)
+   // - kDefaultFormula = kHinde1987: D. Hinde, J. Leigh, J. Bokhorst, J. Newton, R. Walsh, and J. Boldeman, Nuclear Physics A 472, 318 (1987).
    // - kViola1985: V. E. Viola, K. Kwiatkowski, and M. Walker, Physical Review C 31, 1550 (1985).
-   // - kViola1966: V. E. Viola, Jr. , Nucl. Data Tables Al, 391 (1966).
+   // - kViola1966: V. E. Viola, Jr. , Nuclear Data Sheets. Section A 1, 391 (1965).
 
-   Double_t vViola = 0.;
-
+   Double_t Ztot = GetZ();
+   Double_t Atot = GetA();
+   if (nuc) {
+      Ztot += nuc->GetZ();
+      Atot += nuc->GetA();
+   }
+   Double_t tke = 0;
    switch (formula) {
       case kDefaultFormula:
-         if (nuc) vViola = vrelHinde1987(GetZ(), GetA(), nuc->GetZ(), nuc->GetA());
-         else    vViola = vrelViola1985(GetZ(), GetA());
-         break;
-
       case kHinde1987:
-         if (nuc) vViola = vrelHinde1987(GetZ(), GetA(), nuc->GetZ(), nuc->GetA());
-         else    vViola = vrelHinde1987(GetZ() * 0.5, GetA() * 0.5, GetZ() * 0.5, GetA() * 0.5);
+         if (nuc) tke = TKE_Hinde1987(GetZ(), GetA(), nuc->GetZ(), nuc->GetA());
+         else    tke = TKE_Hinde1987(GetZ() * 0.5, GetA() * 0.5, GetZ() - (GetZ() * 0.5), GetA() - (GetA() * 0.5));
          break;
 
       case kViola1985:
-         if (nuc) vViola = vrelViola1985(GetZ() + nuc->GetZ(), GetA() + nuc->GetA());
-         else    vViola = vrelViola1985(GetZ(), GetA());
+         tke = TKE_Viola1985(Ztot, Atot);
          break;
 
       case kViola1966:
-         if (nuc) vViola = vrelViola1966(GetZ() + nuc->GetZ(), GetA() + nuc->GetA());
-         else    vViola = vrelViola1966(GetZ(), GetA());
+         tke = TKE_Viola1966(Ztot, Atot);
+         break;
+
+      case kItkis1998:
+         tke = TKE_Itkis1998(Ztot, Atot);
          break;
    }
 
-   return vViola;
+   return tke;
 }
 
-Double_t KVNucleus::vrelHinde1987(Double_t z1, Double_t a1, Double_t z2, Double_t a2)
+Double_t KVNucleus::GetQFasymTKE(KVNucleus* target)
 {
-   // from: D. Hinde, J. Leigh, J. Bokhorst, J. Newton, R. Walsh, and J. Boldeman, Nuclear Physics A 472, 318 (1987).
-   return TMath::Sqrt(2. / (KVNucleus::u() * a1 * a2 / (a1 + a2)) * (0.755 * z1 * z2 / (pow(a1, 1 / 3.) + pow(a2, 1 / 3.)) + 7.3)) * 29.9792458;
+   // <TKE> of asymmetric QuasiFission fragments (for the fragment mass where the QFasym yield is maximal)
+   // E.M. Kozulin et al PHYSICAL REVIEW C 90, 054608 (2014)
+   // This depends on the entrance channel: this nucleus is assumed to be the projectile,
+   // while the target is given as argument.
+
+   return TKE_Kozulin2014(GetZ(), target->GetZ(), GetA(), target->GetA());
 }
 
-Double_t KVNucleus::vrelViola1985(Double_t z, Double_t a)
+Double_t KVNucleus::GetFissionVelocity(KVNucleus* nuc, Int_t formula)
+{
+   // Average/most probable relative velocity [cm/ns] expected for fission based on various systematics
+   // for fission of highly-excited nuclei produced in heavy-ion reactions.
+   // If nuc=0, this method returns the relative velocity expected for the symmetric fission of this nucleus.
+   // Else, it returns the expected relative velocity considering that nuc and the current nucleus arise
+   // from the fisson of a compound nucleus.
+   // - kItkis1998: M.G. Itkis & A. Ya. Rusanov, Phys. Part. Nucl. 29, 160 (1998)
+   // - kDefaultFormula = kHinde1987: D. Hinde, J. Leigh, J. Bokhorst, J. Newton, R. Walsh, and J. Boldeman, Nuclear Physics A 472, 318 (1987).
+   // - kViola1985: V. E. Viola, K. Kwiatkowski, and M. Walker, Physical Review C 31, 1550 (1985).
+   // - kViola1966: V. E. Viola, Jr. , Nuclear Data Sheets. Section A 1, 391 (1965).
+
+   Double_t vrel = 0;
+   Double_t mu = 0;
+   if (nuc) {
+      mu = nuc->GetMass() * GetMass() / (nuc->GetMass() + GetMass());
+   } else {
+      KVNucleus ff1(0.5 * GetZ(), 0.5 * GetA());
+      KVNucleus ff2(GetZ() - ff1.GetZ(), GetA() - ff1.GetA());
+      mu = ff1.GetMass() * ff2.GetMass() / (ff1.GetMass() + ff2.GetMass());
+   }
+
+   Double_t TKE = GetFissionTKE(nuc, formula);
+   vrel = sqrt(2 * TKE / mu) * C();
+
+   return vrel;
+}
+
+Double_t KVNucleus::TKE_Hinde1987(Double_t z1, Double_t a1, Double_t z2, Double_t a2)
+{
+   // from: D. Hinde, J. Leigh, J. Bokhorst, J. Newton, R. Walsh, and J. Boldeman, Nuclear Physics A 472, 318 (1987)
+   // According to the authors, an extension to asymmetric fission based on TKE_Viola1985
+   return 0.755 * z1 * z2 / (pow(a1, 1 / 3.) + pow(a2, 1 / 3.)) + 7.3;
+}
+
+Double_t KVNucleus::TKE_Viola1985(Double_t z, Double_t a)
 {
    // from: V. E. Viola, K. Kwiatkowski, and M. Walker, Physical Review C 31, 1550 (1985).
-   return TMath::Sqrt(8. / (u() * a) * (0.1189 * z * z / (pow(a, 1 / 3.)) + 7.3)) * 29.9792458;
+   Double_t za = pow(z, 2) / pow(a, 1. / 3.);
+   return 0.1189 * za + 7.3;
 }
 
-Double_t KVNucleus::vrelViola1966(Double_t z, Double_t a)
+Double_t KVNucleus::TKE_Viola1966(Double_t z, Double_t a)
 {
-   // from: V. E. Viola, Jr. , Nucl. Data Tables Al, 391 (1966).
-   return TMath::Sqrt(8. / (u() * a) * (0.1071 * z * z / (pow(a, 1 / 3.)) + 22.2)) * 29.9792458;
+   // from: V. E. Viola, Jr., Nuclear Data Sheets. Section A 1, 391 (1965).
+   Double_t za = pow(z, 2) / pow(a, 1. / 3.);
+   return 0.1071 * za + 22.2;
+}
+
+Double_t KVNucleus::TKE_Itkis1998(Double_t z, Double_t a)
+{
+   // from: M.G. Itkis & A. Ya. Rusanov, Phys. Part. Nucl. 29, 160 (1998)
+   //  Compared to Viola systematics, only heavy-ion induced fission is considered
+   // A change of slope is observed for Z**2/A**1/3 > 900
+
+   Double_t za = pow(z, 2) / pow(a, 1. / 3.);
+   if (za < 900)
+      return 0.131 * za;
+   return 0.104 * za + 24.3;
+}
+
+Double_t KVNucleus::TKE_Kozulin2014(Double_t zp, Double_t zt, Double_t ap, Double_t at)
+{
+   // <TKE> of asymmetric QuasiFission fragments (for the fragment mass where the QFasym yield is maximal)
+   // E.M. Kozulin et al PHYSICAL REVIEW C 90, 054608 (2014)
+
+   return 39.43 + .085 * pow(zp + zt, 2) / pow(ap + at, 1. / 3.);
 }
 
 //_______________________________________________________________________________________

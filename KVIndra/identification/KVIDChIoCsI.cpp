@@ -35,3 +35,23 @@ KVIDChIoCsI::KVIDChIoCsI()
    fECode = kECode1;
    SetSubCodeManager(4, 7);
 }
+
+
+Bool_t KVIDChIoCsI::CheckTheoreticalIdentificationThreshold(KVNucleus* ION, Double_t)
+{
+   // Overrides KVIDTelescope method
+   // We lower the calculated energy threshold to be better in agreement with data
+   // EINC argument not used as ChIo-CsI is always first telescope
+
+   Double_t emin = (1.9 / 2.5) * (fChIo->GetEIncOfMaxDeltaE(ION->GetZ(), ION->GetA()));
+   return (ION->GetEnergy() > emin);
+
+}
+
+void KVIDChIoCsI::Initialize()
+{
+   // Initialize telescope for current run.
+
+   fChIo = (KVChIo*) GetDetector(1);
+   fCsI = (KVCsI*) GetDetector(2);
+}

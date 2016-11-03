@@ -176,3 +176,34 @@ void KVGemini::FillTreeWithArrays(KVSimNucleus& toDecay, Int_t nDecays, TTree* t
    }
    std::cout << std::endl;
 }
+
+Float_t KVGemini::GetMaxSpinWithFissionBarrier(int z, int a)
+{
+   // Maximum angular momentum with non-zero fission barrier (Sierk model)
+   // Only for 19<=Z<=111
+   if (z < 19 || z > 111) {
+      Error("GetMaxSpinWithFissionBarrier", "Only use for 19<=Z<=111");
+      return -1;
+   }
+   float amin = 1.2 * z + 0.01 * pow(z, 2);
+   float amax = 5.8 * z - 0.024 * pow(z, 2);
+
+   if (a < amin || a > amax) {
+      Error("GetMaxSpinWithFissionBarrier", "Only valid for Z=%d with %d<=A<=%d",
+            z, (int)amin, (int)amax);
+      return -1;
+   }
+   return CYrast::instance()->getJmaxSierk(z, a);
+}
+
+Float_t KVGemini::GetFissionBarrierRLDM(int z, int a, float J)
+{
+   // Return Rotating Liquid Drop Model fission barrier for given spin in hbar units
+   return CYrast::instance()->getBarrierFissionRLDM(z, a, J);
+}
+Float_t KVGemini::GetFissionBarrierSierk(int z, int a)
+{
+   // Return Sierk fission barrier for zero angular momentum
+   if (GetMaxSpinWithFissionBarrier(z, a) < 0) return -1;
+   return CYrast::instance()->getBarrierFissionSierk(0.);
+}

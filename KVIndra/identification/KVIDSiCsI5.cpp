@@ -383,14 +383,14 @@ Bool_t KVIDSiCsI5::SetIdentificationParameters(const KVMultiDetArray* MDA)
             aline.ReadLine(datfile);
             Bool_t _Aident = kFALSE;
             if (aline.BeginsWith("MASS_ID")) {
-               idt->SetHasMassID();
+               if (idt) idt->SetHasMassID();
                _Aident = kTRUE;
                aline.Remove(0, 8);
             }
             sscanf(aline.Data(), "%s", type);
 
             if (!strcmp(type, "PG2")) {
-               idt->SetHasPG2();
+               if (idt) idt->SetHasPG2();
             }
 
             aline.ReadLine(datfile);
@@ -398,48 +398,51 @@ Bool_t KVIDSiCsI5::SetIdentificationParameters(const KVMultiDetArray* MDA)
 
             //create new Tassan-Got ID object for telescope
             KVTGID* _tgid = 0, *_tgid2 = 0;
-            if (_Aident) {
-               //When mass ID is possible, have to create two objects: one
-               //for Z ident and the other for A ident
-               //A-identification functional. Set name of parameter "Z"
-               _tgid =
-                  new KVTGIDZA(idt->
-                               GetTGIDName(idt->GetName(), "A", type),
-                               "tassangot_A", 0.1, 100., 13, 11, 12);
-               _tgid->SetParName(10, "Z");
-               _tgid2 =
-                  new KVTGIDZ(idt->GetTGIDName(idt->GetName(), "Z", type),
-                              "pichon_Z", 0.1, 100., 12, 10, 11);
-            } else {
-               //Z-identification functional.
-               _tgid =
-                  new KVTGIDZ(idt->GetTGIDName(idt->GetName(), "Z", type),
-                              "pichon_Z", 0.1, 100., 12, 10, 11);
-            }
+            if (idt) {
+               if (_Aident) {
+                  //When mass ID is possible, have to create two objects: one
+                  //for Z ident and the other for A ident
+                  //A-identification functional. Set name of parameter "Z"
+                  _tgid =
+                     new KVTGIDZA(idt->
+                                  GetTGIDName(idt->GetName(), "A", type),
+                                  "tassangot_A", 0.1, 100., 13, 11, 12);
+                  _tgid->SetParName(10, "Z");
+                  _tgid2 =
+                     new KVTGIDZ(idt->GetTGIDName(idt->GetName(), "Z", type),
+                                 "pichon_Z", 0.1, 100., 12, 10, 11);
+               } else {
+                  //Z-identification functional.
+                  _tgid =
+                     new KVTGIDZ(idt->GetTGIDName(idt->GetName(), "Z", type),
+                                 "pichon_Z", 0.1, 100., 12, 10, 11);
+               }
 
-            _tgid->SetIDmin((Double_t) zmin);
-            _tgid->SetIDmax((Double_t) zmax);
-            if (_Aident) {
-               _tgid2->SetIDmin((Double_t) zmin);
-               _tgid2->SetIDmax((Double_t) zmax);
+               _tgid->SetIDmin((Double_t) zmin);
+               _tgid->SetIDmax((Double_t) zmax);
+               if (_Aident) {
+                  _tgid2->SetIDmin((Double_t) zmin);
+                  _tgid2->SetIDmax((Double_t) zmax);
+               }
             }
             //read line with parameters on it from file
             aline.ReadLine(datfile);
-            TObjArray* par_arr = aline.Tokenize(" ");   //split up into 1 string per parameter
-            for (int i = 0; i < par_arr->GetEntries(); i++) {
-               //read Double_t value in string
-               KVString kvs(((TObjString*)(*par_arr)[i])->String());
-               Double_t param = kvs.Atof();
-               //set parameter of ID functional
-               _tgid->SetParameter(i, param);
+            if (idt) {
+               unique_ptr<TObjArray> par_arr(aline.Tokenize(" "));   //split up into 1 string per parameter
+               for (int i = 0; i < par_arr->GetEntries(); i++) {
+                  //read Double_t value in string
+                  KVString kvs(((TObjString*)(*par_arr)[i])->String());
+                  Double_t param = kvs.Atof();
+                  //set parameter of ID functional
+                  _tgid->SetParameter(i, param);
+                  if (_Aident)
+                     _tgid2->SetParameter(i, param);
+               }
+               //add identification object to telescope's ID manager
+               idt->AddTGID(_tgid);
                if (_Aident)
-                  _tgid2->SetParameter(i, param);
+                  idt->AddTGID(_tgid2);
             }
-            delete par_arr;
-            //add identification object to telescope's ID manager
-            idt->AddTGID(_tgid);
-            if (_Aident)
-               idt->AddTGID(_tgid2);
          }
       }
       aline.ReadLine(datfile);

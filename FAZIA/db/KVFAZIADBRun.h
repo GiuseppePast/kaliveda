@@ -17,10 +17,6 @@ public:
    KVFAZIADBRun(Int_t number, const Char_t* title);
    virtual ~KVFAZIADBRun();
 
-   void SetTrigger(Int_t mt);
-   Int_t GetTrigger() const;
-   const Char_t* GetTriggerString() const;
-
    void SetACQStatus(const KVString& status);
    const Char_t* GetACQStatus() const;
 

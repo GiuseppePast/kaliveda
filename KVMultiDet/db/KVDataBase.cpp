@@ -20,6 +20,7 @@ $Id: KVDataBase.cpp,v 1.26 2009/01/22 13:55:00 franklan Exp $
 #include "TROOT.h"
 #include "Riostream.h"
 #include "TPluginManager.h"
+#include "KVNumberList.h"
 
 KVDataBase* gDataBase;
 
@@ -256,10 +257,10 @@ KVDataBase* KVDataBase::MakeDataBase(const Char_t* name, const Char_t* datasetdi
    //Static function which will create and 'Build' the database object corresponding to 'name'
    //These are defined as 'Plugin' objects in the file $KVROOT/KVFiles/.kvrootrc :
    //
-   //      Plugin.KVDataBase:    INDRA_camp1    KVINDRADB1     KVIndra    "KVINDRADB1()"
-   //      +Plugin.KVDataBase:    INDRA_camp2    KVINDRADB2     KVIndra    "KVINDRADB2()"
-   //      +Plugin.KVDataBase:    INDRA_camp4    KVINDRADB4     KVIndra    "KVINDRADB4()"
-   //      +Plugin.KVDataBase:    INDRA_camp5    KVINDRADB5     KVIndra5    "KVINDRADB5()"
+   //      Plugin.KVDataBase:    INDRA_camp1    KVDataBase1     KVIndra    "KVDataBase1()"
+   //      +Plugin.KVDataBase:    INDRA_camp2    KVDataBase2     KVIndra    "KVDataBase2()"
+   //      +Plugin.KVDataBase:    INDRA_camp4    KVDataBase4     KVIndra    "KVDataBase4()"
+   //      +Plugin.KVDataBase:    INDRA_camp5    KVDataBase5     KVIndra5    "KVDataBase5()"
    //
    //The 'name' ("INDRA_camp1" etc.) corresponds to the name of a dataset in $KVROOT/KVFiles/manip.list
    //This name is stored in member variable fDataSet.

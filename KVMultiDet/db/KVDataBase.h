@@ -24,6 +24,7 @@ $Id: KVDataBase.h,v 1.20 2009/01/22 13:55:00 franklan Exp $
 #include "KVDBRecord.h"
 
 class TFile;
+class KVNumberList;
 
 class KVDataBase: public TFolder {
 
@@ -68,6 +69,7 @@ public:
    {
       fDataSetDir = d;
    }
+
 
    ClassDef(KVDataBase, 2)     // Base Class for a database of parameters
 };

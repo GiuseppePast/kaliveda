@@ -83,19 +83,21 @@ Double_t KVI2::ComputeBaseLine()
    // special case for current signal
    // in case the pulse start to early,
    // base line is calculated at the end of the signal
+   KVSignal::ComputeBaseLine();
 
-   double bls = FindMedia(fFirstBL, fLastBL);
-   double ble = FindMedia(GetNSamples() - 1 - (fLastBL - fFirstBL), GetNSamples() - 1);
-
-   if (bls < ble) {
-      fBaseLine = bls;
-      fSigmaBase = TMath::Sqrt(FindSigma2(fFirstBL, fLastBL));
+   if (fBaseLine <= fEndLine) {
+      //do nothing baseline is kept as calculated by default KVSignal method
    } else {
-      fBaseLine = ble;
-      fSigmaBase = TMath::Sqrt(FindSigma2(GetNSamples() - 1 - (fLastBL - fFirstBL), GetNSamples() - 1));
-
+      //compute the base line at the end of the signal
+      //baseline length is taken as for the standard base line calculation
+      //
+      ComputeEndLine();
+      fBaseLine = fEndLine;
+      fSigmaBase = fSigmaEnd;
    }
+
    return fBaseLine;
+
 }
 
 

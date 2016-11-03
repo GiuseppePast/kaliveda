@@ -22,7 +22,7 @@ private:
 
 protected:
 
-   TH1F***   fQ;      //! array of TH1F for calibrated charge [raw, calibrated, clean][Chamber 1, Chamber 2]
+   TH1F***   fQ;  //! array of TH1F for calibrated charge [raw, calibrated, clean][Chamber 1, Chamber 2]
    Double_t   fRawPosX[3]; //! Measured X raw position for both Chambers
    Double_t   fERawPosX[3]; //! Error of measured X raw position for both Chambers
    Double_t   fRawPosY; //!  Measured Y raw position
@@ -33,6 +33,9 @@ protected:
    Float_t     fStripWidth;//! X-Strip width
    Float_t     fOffsetZ[3];// Z offset in cm for Y, X1 and X2 measurements
    Float_t     fOffsetX[2];// X1 and X2 offset in fraction of the strip width
+   Int_t       fPadMax[2];// Pad with maximum charge from the histogram representing the calibrated charge versus strip number
+   Bool_t      fkSECHS;    //! Set kTRUE to use the Hyperbolic Secant Squared (SECHS) method to find X positions, else will use the Mean's and RMS's of the charges
+   Bool_t      fkRawPosSetByHand; //! To know if the raw position was set/modified using the SetRawPosition() method
 
    void init();
 
@@ -65,6 +68,7 @@ public:
    virtual void ShowCleanQHisto(Int_t c_num = 1, Option_t* opt = "");
    virtual void ShowQrawHisto(Int_t c_num = 1, Option_t* opt = "");
    virtual void ShowQHisto(Int_t c_num = 1, Option_t* opt = "");
+   virtual void SetRawPosition(Double_t* X1_X2_Y_Pad1_Pad2);
 
    virtual UChar_t GetPosition(Double_t* XYZf, Char_t dir = 0, Int_t num = 0);
    virtual void    GetDeltaXYZf(Double_t* XYZf, Char_t dir = 0, Int_t num = 0);
@@ -82,6 +86,11 @@ public:
    Bool_t    IsPositionCalibrated() const;
    void      SetZOffsets(Float_t X1 = -2.5, Float_t X2 = 2.5, Float_t Y = 0);
    void      SetXOffsets(Float_t X1 = 0., Float_t X2 = 0.);
+   Int_t     GetPadMax(Int_t row_num);
+   void      SetSECHSReconstructionX(Bool_t kSECHS = kTRUE);
+   Bool_t    IsSECHSReconstructionX();
+   void      ResetRawPositions();
+   Bool_t    IsRawPosSetByHand();
 
    ClassDef(KVDriftChamber, 1) //Drift Chamber, used at the focal plan of VAMOS
 };
@@ -173,4 +182,40 @@ inline void KVDriftChamber::SetXOffsets(Float_t X1, Float_t X2)
    fOffsetX[0] = X1;
    fOffsetX[1] = X2;
 }
+//________________________________________________________________
+
+inline Int_t KVDriftChamber::GetPadMax(Int_t row_num)
+{
+   // Returns the pad with the maximum charge from the histogram representing
+   // the calibrated charge versus strip number for the chosen row of the drift
+   // chamber.
+   // row_num = {1,2}
+
+   if (row_num < 3 && row_num > 0) return fPadMax[ row_num - 1 ];
+   else return -1;
+}
+
+inline void KVDriftChamber::SetSECHSReconstructionX(Bool_t ksechs)
+{
+   fkSECHS = ksechs;
+}
+//________________________________________________________________
+
+inline Bool_t KVDriftChamber::IsSECHSReconstructionX()
+{
+   return fkSECHS;
+}
+//________________________________________________________________
+
+inline void KVDriftChamber::ResetRawPositions()
+{
+   fkRawPosSetByHand = kFALSE;
+}
+
+inline Bool_t KVDriftChamber::IsRawPosSetByHand()
+{
+   return fkRawPosSetByHand;
+}
+//________________________________________________________________
+
 #endif

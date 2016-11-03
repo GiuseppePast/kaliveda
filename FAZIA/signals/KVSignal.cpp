@@ -68,9 +68,8 @@ void KVSignal::init()
 
 void KVSignal::ResetIndexes()
 {
-   fIndex = -1;
-   fBlock = fQuartet = fTelescope = -1;
-   fType = fDet = fTelName = fQuartetName = "";
+   fIndex = 0;
+   fDetName = "";
    fFPGAOutputNumbers = 0;
 }
 
@@ -111,7 +110,6 @@ KVSignal* KVSignal::ConvertTo(const Char_t* type)
       sig = (KVSignal*)cl->New();
       sig->SetData(this->GetN(), this->GetX(), this->GetY());
       sig->LoadPSAParameters();
-      delete cl;
    }
    return sig;
 }
@@ -159,6 +157,7 @@ void KVSignal::SetData(Int_t nn, Double_t* xx, Double_t* yy)
    SetADCData();
 }
 
+//________________________________________________________________
 void KVSignal::SetADCData()
 {
 
@@ -166,6 +165,44 @@ void KVSignal::SetADCData()
    fAdc.Set(GetN());
    for (int ii = 0; ii < GetN(); ii++) fAdc.AddAt(fY[ii], ii);
 
+}
+
+
+//________________________________________________________________
+void KVSignal::TreateOldSignalName()
+{
+   TString stit = GetTitle();
+   stit.ToUpper();
+
+   KVString tmp = GetName();
+   KVString part = "";
+   if (tmp.BeginsWith("B")) {
+      tmp.Begin("-");
+      part = tmp.Next();
+      part.ReplaceAll("B", "");
+      Int_t bb = part.Atoi();
+      part = tmp.Next();
+      part.ReplaceAll("Q", "");
+      Int_t qq = part.Atoi();
+      part = tmp.Next();
+      part.ReplaceAll("T", "");
+      Int_t tt = part.Atoi();
+      fType = tmp.Next();
+
+      fIndex = 100 * bb + 10 * qq + tt;
+      fDetName.Form("%s-%d", stit.Data(), fIndex);
+   } else if (tmp.BeginsWith("RUTH")) {
+      //Old FAZIA telescope denomination
+      //    Rutherford telescope case for FAZIASYM experiment
+      tmp.Begin("-");
+      part = tmp.Next();
+      fType = tmp.Next();
+
+      TString stit = GetTitle();
+      stit.ToUpper();
+
+      fDetName.Form("%s-RUTH", stit.Data());
+   }
 }
 
 //________________________________________________________________
@@ -179,41 +216,38 @@ void KVSignal::DeduceFromName()
    ResetIndexes();
    KVString tmp = GetName();
    KVString part = "";
-   if (tmp.BeginsWith("B")) {
-      //FAZIA telescope denomination
-      tmp.Begin("-");
-      part = tmp.Next();
-      part.ReplaceAll("B", "");
-      fBlock = part.Atoi();
-      part = tmp.Next();
-      part.ReplaceAll("Q", "");
-      fQuartet = part.Atoi();
-      part = tmp.Next();
-      part.ReplaceAll("T", "");
-      fTelescope = part.Atoi();
-      fType = tmp.Next();
-      fDet = GetTitle();
-      fDet.ToUpper();
-
-      fDetName.Form("%s-T%d-Q%d-B%03d", fDet.Data(), fTelescope, fQuartet, fBlock);
-      fTelName.Form("B%03d-Q%d-T%d", fBlock, fQuartet, fTelescope);
-      fQuartetName.Form("B%03d-Q%d", fBlock, fQuartet);
-
-      fIndex = 100 * fBlock + 10 * fQuartet + fTelescope;
-
-   } else if (tmp.BeginsWith("RUTH")) {
-      //Info("DeduceFromName","Rutherford signal : %s",GetName());
-      tmp.Begin("-");
-      fTelName = tmp.Next();
-      fType = tmp.Next();
-
-      fDet = GetTitle();
-      fDet.ToUpper();
-
-      fDetName.Form("%s-%s", fDet.Data(), fTelName.Data());
+   if (tmp.BeginsWith("B") || tmp.BeginsWith("RUTH")) {
+      //Old FAZIA telescope denomination
+      //Info("DeduceFromName","Old format %s",GetName());
+      TreateOldSignalName();
    } else {
-      Info("DeduceFromName", "Other name format that standard FAZIA name : #%s#", GetName());
+
+      if (tmp.GetNValues("-") == 2) {
+         //new general denomination
+         //in KaliVeda :
+         //    signal name : [signal_type]-[index]
+         //    if  index is digit (number), it is the telescope number : 100*b+10*q+t
+         //    if index is a string of character, we kept it as it is
+         //          for example RUTH for the FAZIASYM dataset
+         TString stit = GetTitle();
+         stit.ToUpper();
+         //new format
+         //Info("DeduceFromName", "New format %s", GetName());
+         tmp.Begin("-");
+         fType = tmp.Next();
+         KVString ss = tmp.Next();
+
+         if (ss.IsDigit()) {
+            fIndex = ss.Atoi();
+            fDetName.Form("%s-%d", stit.Data(), fIndex);
+         } else {
+            fDetName.Form("%s-%s", stit.Data(), ss.Data());
+         }
+      } else {
+         Warning("DeduceFromName", "Unkown format %s", GetName());
+      }
    }
+
 
 }
 
@@ -281,25 +315,13 @@ KVPSAResult* KVSignal::GetPSAResult() const
    return 0;
 }
 
-//________________________________________________________________
-void KVSignal::SetDetectorName(const Char_t* detname)
-{
-   fDetName = detname;
-}
 
-//________________________________________________________________
-void KVSignal::SetDetector(const Char_t* det)
-{
-   fDet = det;
-   fDet.ToUpper();
-}
 //________________________________________________________________
 void KVSignal::Print(Option_t*) const
 {
    Info("Print", "\nName: %s - Title: %s", GetName(), GetTitle());
-   if (fBlock != -1) {
-      printf("\tBlock# %d - Quartet# %d - Telescope# %d\n", fBlock, fQuartet, fTelescope);
-      printf("\tType: %s - Detecteur: %s\n", fType.Data(), fDet.Data());
+   if (fDetName != "") {
+      printf("\tAssociated to the detector %s\n", fDetName.Data());
    }
    printf("################\nPSA parameters:\n");
    printf("\tBaseLine: length: %lf first: %lf\n", GetBLLength(), GetBLFirst());
@@ -312,7 +334,6 @@ void KVSignal::Print(Option_t*) const
       printf(" %1.2lf", GetInterpolatedChannelWidth());
    printf("\n");
    printf("\tWith PoleZero correction: %d\n", Int_t(fWithPoleZeroCorrection));
-
 
 }
 
@@ -362,9 +383,7 @@ Double_t KVSignal::ComputeBaseLine()
 {
    //compute mean value of the signal and the rms between
    // limits defined by fFirstBL and fLastBL
-
-   fBaseLine  = FindMedia(fFirstBL, fLastBL);
-   fSigmaBase = TMath::Sqrt(FindSigma2(fFirstBL, fLastBL));
+   ComputeMeanAndSigma(fFirstBL, fLastBL, fBaseLine, fSigmaBase);
    return fBaseLine;
 }
 
@@ -416,9 +435,7 @@ Double_t KVSignal::ComputeEndLine()
 {
    //same as ComputeBaseLine method but made on the end of the signal
    //in the same length as for the base line
-
-   fEndLine  = FindMedia(GetN() - (fLastBL - fFirstBL), GetN() - 1);
-   fSigmaEnd = TMath::Sqrt(FindSigma2(GetN() - (fLastBL - fFirstBL), GetN() - 1));
+   ComputeMeanAndSigma(GetN() - (fLastBL - fFirstBL), GetN(), fEndLine, fSigmaEnd);
    return fEndLine;
 }
 
@@ -508,72 +525,128 @@ double KVSignal::FindTzeroLeadingEdgeCubic(double LEVEL, int Nrecurr)
 }
 
 
-
-double KVSignal::FindMedia(double tsta, double tsto)
+//----------------------------------
+Bool_t KVSignal::ComputeMeanAndSigma(Int_t start, Int_t stop, Double_t& mean, Double_t& sigma)
+//----------------------------------
 {
-   int n1 = (int)(tsta / fChannelWidth); // Non molto preciso, ma tant'e'...
-   int n2 = (int)(tsto / fChannelWidth);
-
-   return FindMedia(n1, n2);
-}
-
-double KVSignal::FindMedia(int tsta, int tsto)
-{
-   // Calcolo della media nel tratto tra tsta e tsto.
-   // NOTA: questo ha senso solo se il segnale e' piatto in quella regione!!
-
-   int n1 = (int)(tsta);
-   int n2 = (int)(tsto);
-
-   int N = n2 - n1 + 1;
-   //// printf("n1=%d, n2=%d, n=%d, fChannelWidth=%e \n",n1, n2, N, fChannelWidth);
-   if (n1 < 0 || n1 >= fAdc.GetSize() ||
-         n2 < n1 || n2 >= fAdc.GetSize() ||
-         N <= 0 || N >= fAdc.GetSize()) {
-      printf("--- FSignal::FindMedia:  tsta=%d, tsto=%d ?? (%d)\n", tsta, tsto, fAdc.GetSize());
-      return -1E10;//non cambiare, serve a FindSigma2!!
+   //compute mean value and sigma values
+   //between "start" point included and "stop" point excluded
+   //for example :
+   //    ComputeMeanAndSigma(0,50,mean,sigma)
+   //    compute values for the first 50 points
+   //
+   Int_t np = 0;
+   Double_t xx;
+   mean = 0;
+   Double_t mean2 = 0;
+   if (stop > GetN()) {
+      Warning("ComputeMeanAndSigma",
+              "stop position greater than number of samples %d/%d, set stop to %d", GetN(), stop, GetN());
+      stop = GetN();
    }
-   double media = 0;
-   for (int i = n1; i <= n2; i++)
-      media += fAdc.At(i);
-   media /= N;
-   return media;
-}
-
-double KVSignal::FindSigma2(double tsta, double tsto)
-{
-   // Calcolo della varianza nel tratto tra tsta e tsto.
-   // NOTA: questo ha senso solo se il segnale e' piatto in quella regione!!
-
-   int n1 = (int)(tsta / fChannelWidth); // Non molto preciso, ma tant'e'...
-   int n2 = (int)(tsto / fChannelWidth);
-
-   return FindSigma2(n1, n2);
-}
-
-double KVSignal::FindSigma2(int tsta, int tsto)
-{
-   // Calcolo della varianza nel tratto tra tsta e tsto.
-   // NOTA: questo ha senso solo se il segnale e' piatto in quella regione!!
-
-   int n1 = (int)(tsta);
-   int n2 = (int)(tsto);
-
-   int N = n2 - n1 + 1;
-   double sigma2 = 0;
-   double media = FindMedia(tsta, tsto);
-   if (media == -1E10) {
-      printf("--- FSignal::FindSigma2(double tsta, double tsto) ---: errore nella media\n");
-      return -1;
+   if (start < 0) {
+      Warning("ComputeMeanAndSigma",
+              "start position unrealistic %d, set start to 0", start);
+      start = 0;
    }
 
-   for (int i = n1; i <= n2; i++)
-      sigma2 += (media - fAdc.At(i)) * (media - fAdc.At(i));
+   for (Int_t ii = start; ii < stop; ii += 1) {
+      xx = fAdc.At(ii);
+      mean += xx;
+      mean2 += xx * xx;
+      np += 1;
+   }
 
-   sigma2 /= N - 1;
-
-   return sigma2;
+   if (np == 0) {
+      Error("ComputeMeanAndSigma", "values cannot be computed with 0 sample");
+      return kFALSE;
+   }
+   mean /= np;
+   mean2 /= np;
+   sigma = TMath::Sqrt(mean2 - mean * mean);
+   return kTRUE;
 }
+
+//----------------------------------
+Bool_t KVSignal::ComputeMeanAndSigma(Double_t start, Double_t stop, Double_t& mean, Double_t& sigma)
+//----------------------------------
+{
+   //
+   //assuming that X axis is in time unit (ms)
+   //divide the X values by the fChannelWidth value which allow  to set the Xaxis in time units
+   //compute mean value and sigma values
+   //between "start" and "stop" point included
+   //
+   return ComputeMeanAndSigma(Int_t(start / fChannelWidth), Int_t(stop / fChannelWidth), mean, sigma);
+}
+
+// double KVSignal::FindMedia(double tsta, double tsto)
+// {
+//    Info("FindMedia(double tsta, double tsto)","Appel ...");
+//    int n1 = (int)(tsta / fChannelWidth); // Non molto preciso, ma tant'e'...
+//    int n2 = (int)(tsto / fChannelWidth);
+//
+//    return FindMedia(n1, n2);
+// }
+//
+// double KVSignal::FindMedia(int tsta, int tsto)
+// {
+//    // Calcolo della media nel tratto tra tsta e tsto.
+//    // NOTA: questo ha senso solo se il segnale e' piatto in quella regione!!
+//
+//    int n1 = (int)(tsta);
+//    int n2 = (int)(tsto);
+//
+//    int N = n2 - n1 + 1;
+//    //// printf("n1=%d, n2=%d, n=%d, fChannelWidth=%e \n",n1, n2, N, fChannelWidth);
+//    if (n1 < 0 || n1 >= fAdc.GetSize() ||
+//          n2 < n1 || n2 >= fAdc.GetSize() ||
+//          N <= 0 || N >= fAdc.GetSize()) {
+//       printf("--- FSignal::FindMedia:  tsta=%d, tsto=%d ?? (%d)\n", tsta, tsto, fAdc.GetSize());
+//       return -1E10;//non cambiare, serve a FindSigma2!!
+//    }
+//    double media = 0;
+//    for (int i = n1; i <= n2; i++)
+//       media += fAdc.At(i);
+//
+//    media /= N;
+//    return media;
+// }
+//
+// double KVSignal::FindSigma2(double tsta, double tsto)
+// {
+//    // Calcolo della varianza nel tratto tra tsta e tsto.
+//    // NOTA: questo ha senso solo se il segnale e' piatto in quella regione!!
+//
+//    int n1 = (int)(tsta / fChannelWidth); // Non molto preciso, ma tant'e'...
+//    int n2 = (int)(tsto / fChannelWidth);
+//
+//    return FindSigma2(n1, n2);
+// }
+//
+// double KVSignal::FindSigma2(int tsta, int tsto)
+// {
+//    // Calcolo della varianza nel tratto tra tsta e tsto.
+//    // NOTA: questo ha senso solo se il segnale e' piatto in quella regione!!
+//
+//    int n1 = (int)(tsta);
+//    int n2 = (int)(tsto);
+//
+//    int N = n2 - n1 + 1;
+//    double sigma2 = 0;
+//    double media = FindMedia(tsta, tsto);
+//    if (media == -1E10) {
+//       printf("--- FSignal::FindSigma2(double tsta, double tsto) ---: errore nella media\n");
+//       return -1;
+//    }
+//
+//    for (int i = n1; i <= n2; i++)
+//       sigma2 += (media - fAdc.At(i)) * (media - fAdc.At(i));
+//
+//    sigma2 /= N-1;
+//
+//    return sigma2;
+// }
 
 
 void KVSignal::FIR_ApplyTrapezoidal(double trise, double tflat) // trise=sqrt(12)*tausha di CR-RC^4 se tflat=trise/2
@@ -846,7 +919,7 @@ TH1* KVSignal::FFT2Histo(int output, TH1* hh)  // 0 modulo, 1 modulo db (normali
             break;
       }
    }
-   h->GetXaxis()->SetTitle("Frequency");
+//   h->GetXaxis()->SetTitle("Frequency");
    delete [] re;
    delete [] im;
 
@@ -1061,10 +1134,10 @@ void KVSignal::BuildSmoothingSplineSignal(double taufinal, double l, int nbits)
    const int Nsa = fAdc.GetSize();
    const double tau = fChannelWidth;
 
-   KVSignal* coeff = new KVSignal();
-   this->ApplyModifications(coeff);
-   coeff->SetADCData();
-   if (coeff->FIR_ApplySmoothingSpline(l, nbits) != 0) return;
+   KVSignal coeff;
+   this->ApplyModifications(&coeff);
+   coeff.SetADCData();
+   if (coeff.FIR_ApplySmoothingSpline(l, nbits) != 0) return;
 
    fChannelWidthInt = taufinal;
    TArrayF interpo;
@@ -1074,7 +1147,7 @@ void KVSignal::BuildSmoothingSplineSignal(double taufinal, double l, int nbits)
    if (nlast <= 0) return;
 
 //   for (int i = 0; i < interpo.GetSize()-3*tau; i++) interpo.AddAt(GetDataSmoothingSplineLTI(i * taufinal), i);
-   for (int i = 0; i < interpo.GetSize() - (int)(53 * tau / taufinal); i++) interpo.AddAt(coeff->GetDataSmoothingSplineLTI(i * taufinal), i);
+   for (int i = 0; i < interpo.GetSize() - (int)(53 * tau / taufinal); i++) interpo.AddAt(coeff.GetDataSmoothingSplineLTI(i * taufinal), i);
    fAdc.Set(0);
    fAdc.Set(interpo.GetSize());
    for (int i = 0; i < nlast; i++) fAdc.AddAt(interpo.At(i), i);

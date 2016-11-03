@@ -84,6 +84,8 @@ ClassImp(KVEventSelector)
 // allowing it to be found at the end of the analysis)
 ////////////////////////////////////////////////////////////////////////////////
 
+Bool_t KVEventSelector::fCleanAbort = kFALSE;
+
 void KVEventSelector::Begin(TTree* /*tree*/)
 {
    // Need to parse options here for use in Terminate
@@ -170,11 +172,18 @@ Bool_t KVEventSelector::Process(Long64_t entry)
    // simple or elaborate selection criteria, run algorithms on the data
    // of the event and typically fill histograms.
    //
-   // The processing can be stopped by calling Abort().
+   // Processing will abort cleanly if static flag fCleanAbort has been set
+   // by some external controlling process.
    //
    // Use fStatus to set the return value of TTree::Process().
    //
    // The return value is currently not used.
+
+   if (fCleanAbort) {
+      // abort requested by external process
+      Abort(Form("CleanAbort flag set after %lld events", fEventsRead), kAbortFile);
+      return kFALSE;
+   }
 
    fTreeEntry = entry;
 

@@ -668,7 +668,13 @@ void KVMultiDetArray::DetectEvent(KVEvent* event, KVReconstructedEvent* rec_even
       Double_t eLostInTarget = 0;
       KVDetector* last_det = 0;
 
-      if (!fNavigator->IsTracking() && (part->GetZ() == 0)) {
+      if (part->GetZ() && !fNavigator->CheckIonForRangeTable(part->GetZ(), part->GetA())) {
+         // ignore charged particles which range table cannot handle
+         det_stat->SetValue("UNDETECTED", Form("Z=%d", part->GetZ()));
+
+         part->AddGroup("UNDETECTED");
+         part->AddGroup("SUPERHEAVY");
+      } else if (!fNavigator->IsTracking() && (part->GetZ() == 0)) {
          // when tracking is activated, we follow neutron trajectories
          // if not, we don't even bother trying
          det_stat->SetValue("UNDETECTED", "NEUTRON");

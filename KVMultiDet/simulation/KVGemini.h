@@ -22,6 +22,10 @@ public:
    void FillTreeWithEvents(KVSimNucleus&, Int_t, TTree*, TString branchname = "");
    void FillTreeWithArrays(KVSimNucleus&, Int_t, TTree*, TString mode = "EThetaPhi");
 
+   Float_t GetMaxSpinWithFissionBarrier(int, int);
+   Float_t GetFissionBarrierRLDM(int z, int a, float J);
+   Float_t GetFissionBarrierSierk(int z, int a);
+
    ClassDef(KVGemini, 1) //Interface to gemini++
 };
 

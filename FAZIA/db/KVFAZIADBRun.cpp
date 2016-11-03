@@ -57,24 +57,6 @@ KVFAZIADBRun::~KVFAZIADBRun()
    // Destructor
 }
 
-void KVFAZIADBRun::SetTrigger(Int_t mt)
-{
-   SetScaler("Trigger multiplicity", mt);
-}
-
-Int_t KVFAZIADBRun::GetTrigger() const
-{
-   return GetScaler("Trigger multiplicity");
-}
-
-const Char_t* KVFAZIADBRun::GetTriggerString() const
-{
-   if (GetTrigger() > 0)
-      return Form("M>=%d", GetTrigger());
-   else
-      return Form("xxx");
-}
-
 void KVFAZIADBRun::SetACQStatus(const KVString& status)
 {
    Set("ACQ Status", status);

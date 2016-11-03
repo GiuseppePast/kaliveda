@@ -4,6 +4,7 @@
 #include "KVSimEvent.h"
 
 #include <KVSimNucleus.h>
+using namespace std;
 
 ClassImp(KVSimEvent)
 

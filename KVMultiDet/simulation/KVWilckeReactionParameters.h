@@ -67,6 +67,8 @@ public:
    KVWilckeReactionParameters(const KVNucleus& proj, const KVNucleus& targ);
    virtual ~KVWilckeReactionParameters();
 
+   void SetEntranceChannel(const KVNucleus& proj, const KVNucleus& targ);
+
    static Double_t InteractionRadius(Int_t aproj, Int_t atarg)
    {
       // Interaction radius [fm]
@@ -336,6 +338,7 @@ public:
    void Print() const;
    Double_t PotentialPocketRadius(Double_t l);
    Double_t GetMaximumAngularMomentumWithPocket();
+   Double_t PotentialMaximumRadius(Double_t l);
 
    Double_t GetMu() const
    {

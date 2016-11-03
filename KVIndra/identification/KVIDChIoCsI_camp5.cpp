@@ -44,8 +44,7 @@ void KVIDChIoCsI_camp5::Initialize()
    // If there is at least 1 grid, we set fCanIdentify = kTRUE
    // "Natural" line widths are calculated for KVIDZAGrids.
 
-   fChIo = (KVChIo*) GetDetector(1);
-   fCsI = (KVCsI*) GetDetector(2);
+   KVIDChIoCsI::Initialize();
    fCsIRPedestal = fCsI->GetPedestal("R");
    fCsILPedestal = fCsI->GetPedestal("L");
    fGGgrid = fPGgrid = 0;

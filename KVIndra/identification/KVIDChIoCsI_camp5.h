@@ -12,15 +12,11 @@ $Date: 2009/04/06 15:21:31 $
 
 #include "KVIDChIoCsI.h"
 #include "KVIDZAGrid.h"
-#include "KVChIo.h"
-#include "KVCsI.h"
 
 class KVIDChIoCsI_camp5 : public KVIDChIoCsI {
 
    KVIDZAGrid* fGGgrid;//! grid used for ChIo(GG)-CsI(R) charge identification
    KVIDZAGrid* fPGgrid;//! grid used for ChIo(PG)-CsI(R) charge identification
-   KVChIo* fChIo;//!the chio
-   KVCsI* fCsI;//!the csi
    Double_t fCsIRPedestal;//!CsI Rapide pedestal for current run
    Double_t fCsILPedestal;//!CsI Lente pedestal for current run
 

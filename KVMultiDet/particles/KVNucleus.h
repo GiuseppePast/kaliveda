@@ -58,6 +58,7 @@ public:
 
    enum {
       kDefaultFormula,
+      kItkis1998,
       kHinde1987,
       kViola1985,
       kViola1966
@@ -137,8 +138,8 @@ public:
       //
       return Double_t(GetN() - GetZ()) / GetA();
    }
-   Double_t GetEnergyPerNucleon();
-   Double_t GetAMeV();
+   Double_t GetEnergyPerNucleon() const;
+   Double_t GetAMeV() const;
 
    void CheckZAndA(Int_t& z, Int_t& a) const;
 
@@ -197,11 +198,15 @@ public:
    // TH2F* GetKnownNucleiChart(KVString method="GetBindingEnergyPerNucleon");
    Double_t DeduceEincFromBrho(Double_t Brho, Int_t ChargeState = 0);
    Double_t GetRelativeVelocity(KVNucleus* nuc);
-   Double_t GetViolaVelocity(KVNucleus* nuc = 0, Int_t formula = kDefaultFormula /* kHinde1987 kViola1985 kViola1966 */);
+   Double_t GetFissionTKE(KVNucleus* nuc = 0, Int_t formula = kDefaultFormula);
+   Double_t GetQFasymTKE(KVNucleus* target);
+   Double_t GetFissionVelocity(KVNucleus* nuc = 0, Int_t formula = kDefaultFormula);
 
-   static Double_t vrelHinde1987(Double_t z1, Double_t a1, Double_t z2, Double_t a2);
-   static Double_t vrelViola1985(Double_t z, Double_t a);
-   static Double_t vrelViola1966(Double_t z, Double_t a);
+   static Double_t TKE_Hinde1987(Double_t z1, Double_t a1, Double_t z2, Double_t a2);
+   static Double_t TKE_Viola1985(Double_t z, Double_t a);
+   static Double_t TKE_Viola1966(Double_t z, Double_t a);
+   static Double_t TKE_Itkis1998(Double_t z, Double_t a);
+   static Double_t TKE_Kozulin2014(Double_t zp, Double_t zt, Double_t ap, Double_t at);
 
    Bool_t IsElement(Int_t Z) const
    {

@@ -55,6 +55,18 @@ void KVDriftChamber::init()
    // of the range 2 and between strips 32 and 33 of the range 1 (offsets 0,0).
    SetXOffsets();
 
+   // The Hyperbolic Secant Squared (SECHS) method is by default used for X position measurements
+   SetSECHSReconstructionX(kFALSE);
+
+   // To be modified ???
+   // By default the raw positions in drift chambers are calculated from the Q histograms
+   // (see GetRawPosition() method) i.e fkRawPosSetByHand=kFALSE.
+   // This can be modified and set by hand (can be useful for tracking for example)
+   // using the SetRawPosition() method and then fkRawPosSetByHand=kTRUE.
+   // As long as fkRawPosSetByHand=kTRUE, GetRawPosition() will return the values set by hand, the only
+   // way to go back to the raw position calculations from Q histograms is to use ResetRawPositions() method.
+   fkRawPosSetByHand = kFALSE;
+
    //a KVDriftChamber can not be used in a ID telescope
    ResetBit(kOKforID);
 }
@@ -454,24 +466,78 @@ void KVDriftChamber::ShowQHisto(Int_t c_num, Option_t* opt)
 }
 //________________________________________________________________
 
+
+void KVDriftChamber::SetRawPosition(Double_t* X1_X2_Y_Pad1_Pad2)
+{
+   // This method allows to set by hand the raw positions of the drift chamber.
+   // X1X2Yf is an array of 3 elements: X1 is the raw X position for the first row
+   //                                   X2 is the raw X position for the second row
+   //                                   Y is the raw Y position for the drift chamber
+   //                                   Pad1 is the pad with the maximum Q for row 1 (used for SECHS method)
+   //                                   Pad2 is the pad with the maximum Q for row 2 (used for SECHS method)
+   //
+   // If the raw position is set successfully then fkRawPosSet==kTRUE and the GetRawPosition()
+   // method will now return the values set by the user (in stead of calculating them
+   // using the Q histograms), and this as long as fkRawPosSet==kTRUE.
+   // To reset the raw position, the user should use the method ResetRawPosition().
+   //
+   // Once you have set the raw positions, the getter method to access to these positions
+   // will return these new values i.e. the acquisition parameters will
+   // not be read anymore for calculating the raw positions until the next
+   // call to Initialize().
+   //
+   // It is the user responsability to verify what method is used for the raw position
+   // measurement (either SECHS method or Mean/RMS method) (see SetSECHSReconstruction()).
+
+   if (X1_X2_Y_Pad1_Pad2) {
+      fRawPosX[0] = 0.5 * (X1_X2_Y_Pad1_Pad2[0] + X1_X2_Y_Pad1_Pad2[1]); //to be modified if we want to include statistcs...
+      fRawPosX[1] = X1_X2_Y_Pad1_Pad2[0];
+      fRawPosX[2] = X1_X2_Y_Pad1_Pad2[1];
+      fRawPosY   = X1_X2_Y_Pad1_Pad2[2];
+      fPadMax[0] = X1_X2_Y_Pad1_Pad2[3];
+      fPadMax[1] = X1_X2_Y_Pad1_Pad2[4];
+      fkRawPosSetByHand = kTRUE;
+   }
+}
+//________________________________________________________________
+
 Double_t KVDriftChamber::GetRawPosition(Char_t dir, Int_t num)
 {
-   // Returns the raw position (strip for X and electron-drift-time canal for Y) with respect to
-   // the center of the detector. The value is deduced from the histogram representing
-   // the calibrated charge versus strip number for X direction or returns the electron drift time for Y position.
+   // Returns the raw position in X/Y with respect to the center of the detector. The value is deduced from
+   // the histogram representing the calibrated charge versus strip number for X direction
+   // or returns the electron drift time for Y position.
    // Argument 'num' is used to specified the X position to be returned:
    //  dir = 'X' and num = 0  --> return the mean value between X1 and X2
    //  dir = 'X' and num = 1  --> return X1
    //  dir = 'X' and num = 2  --> return X2
    //
+   //
+   // Two methods can be used for X raw position: the Hyperblic Secant Squared (SECHS) method (used by default)
+   // or the Mean and RMS estimation method. The method used for the X position measurement can be changed
+   // by calling SetSECHSReconstructionX(Bool_t kSECHS)
+   //
+   // SECHS method ( see T.Roger et al. NIMA 638 (2001) and Lau et al. NIMA 366 (1995) ):
+   // We compute here the charge profile's centroid, seen on a strip of width w=StripWidth()/2.
+   // This means the avalanche centroid's position evolves in [0.,w/2.], without considering for the moment
+   // the number of the strip.
+   // To evaluate the centroid, we only consider the charge of the most significant strip and the charges of the
+   // two neighbooring ones (as the spatial resolution is expected to be degraded by the use of more than 3 strips).
+   //
+   // Mean and RMS method:
+   // We evaluate here the Mean and RMS values of the histogram representing the calibrated charge versus strip number.
    // The two cathode plans are offset by half a strip to reduce the non linearity of the position measurement
-   // in between the strips. The center of the detector  is by default at the middle of the strip 32 of the
+   // in between the strips. The center of the detector is by default at the middle of the strip 32 of the
    // range 2 and between strips 32 and 33 of the range 1.
+   //
+   //
    // You can apply an X offset to change the strip position with respect to
    // the center of the detector by calling SetXOffsets.
    //
-   // If the raw position in not calculable, the value -666 is returned.
-
+   //
+   // For Y raw position we evaluate the electron-drift-time canal.
+   //
+   //
+   // In any case, if the raw position in not calculable, the value -666 will be returned.
 
    Int_t idx = IDX(dir);
 
@@ -479,84 +545,120 @@ Double_t KVDriftChamber::GetRawPosition(Char_t dir, Int_t num)
 
       case 0: { // for X direction
 
-            if (num < 0 || num > 2) num = 0;
-            if (fERawPosX[ num ] > -500) return fRawPosX[ num ];
+            //If X raw position was not set by hand
+            if (!IsRawPosSetByHand()) {
+               if (num < 0 || num > 2) num = 0;
+               if (fERawPosX[ num ] > -500) return fRawPosX[ num ];
 
-            fRawPosX [ 0 ] = 0;
-            fERawPosX[ 0 ] = 0.;
-            Double_t sum   = 0.;
+               fRawPosX [ 0 ] = 0;
+               fERawPosX[ 0 ] = 0.;
+               Double_t sum   = 0.;
 
-            for (Int_t c = 1; c < 3; c++) { //loop over both chambers
-               fRawPosX [ c ] = -666;
-               fERawPosX[ c ] = -1;
+               for (Int_t c = 1; c < 3; c++) { //loop over both rows of the chamber
+                  fRawPosX [ c ]   = -666;
+                  fERawPosX[ c ]   = -1;
+                  fPadMax[ c - 1 ] = -666;
 
-               TH1F* hh = GetCleanQHisto(c);
-               if (!hh) continue;
+                  TH1F* hh = GetCleanQHisto(c);
+                  if (!hh) continue;
 
-               if (!hh->GetEntries()) continue;
+                  if (!hh->GetEntries()) continue;
 
-               ///////////////////////////////////////////////////
+                  ///////////////////////////////////////////////////
 
-               Int_t binMax = hh->GetMaximumBin();
-               Int_t min;
-               for (min = binMax; min > 1; min--) {
-                  if (hh->GetBinContent(min) <= 0.) {
-                     min++;
-                     break;
+                  Int_t binMax = hh->GetMaximumBin();
+                  Int_t min;
+                  for (min = binMax; min > 1; min--) {
+                     if (hh->GetBinContent(min) <= 0.) {
+                        min++;
+                        break;
+                     }
+                     Double_t deltaQ = hh->GetBinContent(min) - hh->GetBinContent(min - 1);
+                     if (deltaQ < 0) break;
                   }
-                  Double_t deltaQ = hh->GetBinContent(min) - hh->GetBinContent(min - 1);
-                  if (deltaQ < 0) break;
-               }
-               Int_t max;
-               for (max = binMax; max < hh->GetNbinsX(); max++) {
-                  if (hh->GetBinContent(max) <= 0.) {
-                     max--;
-                     break;
+                  Int_t max;
+                  for (max = binMax; max < hh->GetNbinsX(); max++) {
+                     if (hh->GetBinContent(max) <= 0.) {
+                        max--;
+                        break;
+                     }
+                     Double_t deltaQ = hh->GetBinContent(max) - hh->GetBinContent(max + 1);
+                     if (deltaQ < 0) break;
                   }
-                  Double_t deltaQ = hh->GetBinContent(max) - hh->GetBinContent(max + 1);
-                  if (deltaQ < 0) break;
+
+                  if ((max - min + 1) < fNstripsOK) continue;
+
+                  if (IsSECHSReconstructionX()) {
+                     // Hyperbolic secant squared (SECHS) method:
+                     // by convention Q0 is the charge of the most significant strip
+                     // and Q+ and Q- are the charges of the left and right neighboring pads,
+                     // and ww is the strip(pad) witdh.
+                     fPadMax[c - 1] = hh->GetBinCenter(binMax); //the bin center is the number of the pad
+                     Float_t* QQ  = new Float_t[fNstripsOK];
+                     QQ[0] = hh->GetBinContent(binMax - 1); //Q-
+                     QQ[1] = hh->GetBinContent(binMax);     //Q0
+                     QQ[2] = hh->GetBinContent(binMax + 1); //Q+
+                     Double_t ww = GetStripWidth();         //width of a pad in cm
+
+                     Double_t a2 = 0.5 * (TMath::Sqrt(QQ[1] / QQ[2]) + TMath::Sqrt(QQ[1] / QQ[0]));
+                     Double_t a1 = (TMath::Sqrt(QQ[1] / QQ[2]) - TMath::Sqrt(QQ[1] / QQ[0])) / (2.*TMath::SinH(a2));
+                     Double_t delta = ww / 2. * TMath::Log((1 + a1) / (1 - a1)) / (TMath::Log(a2 + TMath::Sqrt(a2 * a2 - 1)));
+
+                     fRawPosX [ c ]  = delta;
+                     fERawPosX[ c ]  = 0.; //to be modified
+
+                     delete[] QQ;
+                  } else { //Meand and RMS method
+                     // The two cathode plans are offset by half a strip to
+                     // reduce the non linearity of the position measurement
+                     // in between the strips. The center of the detector
+                     // is at the middle of the strip 32 of the range 2
+                     // and between strips 32 and 33 of the range 1.
+                     hh->GetXaxis()->SetRange(min, max);
+
+                     Double_t intgl  = hh->Integral();
+                     sum            += intgl;
+
+                     fPadMax[ c - 1 ]  = hh->GetBinCenter(binMax);
+                     fRawPosX [ c ]  = hh->GetMean() - (c % 2 ? 32.5 + fOffsetX[0] : 32 + fOffsetX[1]);
+                     fERawPosX[ c ]  = hh->GetMeanError();
+                     fRawPosX [ 0 ] += intgl * fRawPosX [ c ];
+                     fERawPosX[ 0 ] += intgl * fERawPosX[ c ];
+
+                     hh->GetXaxis()->SetRange();
+
+                     if (sum) {
+                        fRawPosX [ 0 ] /= sum;
+                        fERawPosX[ 0 ] /= sum;
+                     } else {
+                        fRawPosX [ 0 ] = -666;
+                        fERawPosX[ 0 ] = -1;
+                     }
+                  }
                }
-
-               if ((max - min + 1) < fNstripsOK) continue;
-
-               hh->GetXaxis()->SetRange(min, max);
-
-               Double_t intgl  = hh->Integral();
-               sum            += intgl;
-
-               // The two cathode plans are offset by half a strip to
-               // reduce the non linearity of the position measurement
-               // in between the strips. The center of the detector
-               // is at the middle of the strip 32 of the range 2
-               // and between strips 32 and 33 of the range 1.
-               fRawPosX [ c ]  = hh->GetMean() - (c % 2 ? 32.5 + fOffsetX[0] : 32 + fOffsetX[1]);
-               fERawPosX[ c ]  = hh->GetRMS() * 1.2;
-               fRawPosX [ 0 ] += intgl * fRawPosX [ c ];
-               fERawPosX[ 0 ] += intgl * fERawPosX[ c ];
-
-               hh->GetXaxis()->SetRange();
+               return fRawPosX[ num ];
             }
 
-            if (sum) {
-               fRawPosX [ 0 ] /= sum;
-               fERawPosX[ 0 ] /= sum;
-            } else {
-               fRawPosX [ 0 ] = -666;
-               fERawPosX[ 0 ] = -1;
-            }
+            //If X raw position set by hand
+            else return fRawPosX[ num ];
 
-            return fRawPosX[ num ];
+         }//end case 0
 
 
-         }
       case 1: { // for Y direction returns the acq parameter of TFIL
 
-            fRawPosY  = (fTfilPar && fTfilPar->Fired("P") ? fTfilPar->GetData() : -666);
-            fERawPosY = 0.;
+            //If raw Y position was not set by hand
+            if (!IsRawPosSetByHand()) {
+               fRawPosY  = (fTfilPar && fTfilPar->Fired("P") ? fTfilPar->GetData() : -666);
+               fERawPosY = 0.;
 
-            return fRawPosY;
-         }
+               return fRawPosY;
+            }
 
+            //If raw Y position was set by hand
+            else return fRawPosY;
+
+         }//end case 1
    }
 
    return -1;
@@ -598,14 +700,28 @@ UChar_t KVDriftChamber::GetPosition(Double_t* XYZf, Char_t dir, Int_t num)
    // The 3 first bits of the returned UChar_t value give an information about
    // the coordinates well determined, calibrated and corrected. For example is the Y
    // coordinate, with the indice 1, is good then the bit 1 is set to 1.
+   //
+   // The two cathode plans are offset by half a strip to reduce the non linearity of the position measurement
+   // in between the strips. The center of the detector is by default at the middle of the strip 32 of the
+   // range 2 and between strips 32 and 33 of the range 1.
+   //
+   // The way X position is calculated depends on the method used for raw position.
+   //
+   // If the Hyperblic Secant Squared (SECHS) method was used (by default), then
+   // the bin with the maximum charge, the strip width and the raw position
+   // (in cm = disparity with respect to the pad center) are used to fine the position.
+   // The offsets are taken into account.
+   //
+   // Else if the Mean and RMS method was used then we compute the real distance using
+   // the strip width and the found raw position.
 
    // Nothing is done if there is no calibrator for the position
    if (!IsPositionCalibrated()) return 0;
 
    // num will contain info about dir and num
-   //  X1 --> num=0
-   //  X2 --> num=1
-   //  else num = 2
+   //  X1 --> num=1
+   //  X2 --> num=2
+   //  else num = 0
    num = (dir == 'X' && (num == 1 || num == 2) ? num : 0);
 
    UChar_t rvalue = 0;       // returned value;
@@ -614,7 +730,13 @@ UChar_t KVDriftChamber::GetPosition(Double_t* XYZf, Char_t dir, Int_t num)
    Double_t Yraw = GetRawPosition('Y');
 
    if (Xraw >= -500) { // Calibrate X
-      XYZf[0] = Xraw * GetStripWidth();
+      if (IsSECHSReconstructionX()) {
+         Int_t pad = GetPadMax(num);
+         if (num == 1) XYZf[0] = (pad - 32.5) * GetStripWidth() + Xraw + fOffsetX[0];
+         if (num == 2) XYZf[0] = (pad - 32.) * GetStripWidth()  + Xraw + fOffsetX[1];
+      } else {
+         XYZf[0] = Xraw * GetStripWidth();
+      }
       rvalue += 1;
    }
    if ((Yraw >= -500) && GetDriftTimeCalibrator()) { //Calibrate Y

@@ -205,5 +205,25 @@ void KVDalitzPlot::SetShowCenter(Int_t value)
 
 }
 
+TH1* KVDalitzPlot::GetDistanceFromCenter()
+{
+   //Linearization of the Dalitz representation
+   //histogram is filled according to the distance from each cell
+   //to the center
+   //
+   TH1F* h1 = new TH1F(Form("distance_%s", GetName()), Form("distance_%s", GetName()), 150, 0, 1.5);
+   for (Int_t nx = 1; nx <= GetNbinsX(); nx += 1) {
+      Double_t xx = GetXaxis()->GetBinCenter(nx);
+      for (Int_t ny = 1; ny <= GetNbinsY(); ny += 1) {
+         Double_t yy = GetYaxis()->GetBinCenter(ny);
+         Double_t dist = TMath::Sqrt(TMath::Power(xx - 0.5, 2.) + TMath::Power(yy - 1. / 3., 2.));
+         h1->Fill(dist, GetBinContent(nx, ny));
+      }
+   }
+
+   return h1;
+
+}
+
 
 

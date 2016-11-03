@@ -198,9 +198,10 @@ void KVFAZIA::GetDetectorEvent(KVDetectorEvent* detev, TSeqCollection* signals)
          if (!(par->GetN() > 0))
             Info("GetDetectorEvent", "%s empty", par->GetName());
          par->DeduceFromName();
-         if (!(det = GetDetector(par->GetDetectorName()))) {
-            det = GetDetector(KVFAZIADetector::GetNewName(par->GetDetectorName()));
-         }
+//          if (!(det = GetDetector(par->GetDetectorName()))) {
+//             det = GetDetector(KVFAZIADetector::GetNewName(par->GetDetectorName()));
+//          }
+         det = GetDetector(par->GetDetectorName());
          if (det) {
             ((KVFAZIADetector*)det)->SetSignal(par, par->GetType());
             if ((!(((KVFAZIADetector*)det)->GetSignal(par->GetType())->GetN() > 0)))

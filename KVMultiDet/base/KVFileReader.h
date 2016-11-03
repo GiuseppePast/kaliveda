@@ -22,10 +22,12 @@ public:
    std::ifstream f_in;
 
    KVFileReader();
+   KVFileReader(const KVFileReader&);
+   virtual void Copy(TObject&) const;
+
    virtual ~KVFileReader();
    virtual void init()
    {
-      //Info("init","rentre");
       reading_line = "";
       nline = 0;
       toks = new TObjArray();

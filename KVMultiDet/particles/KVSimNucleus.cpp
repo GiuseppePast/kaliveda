@@ -2,6 +2,7 @@
 //Author: bonnet
 
 #include "KVSimNucleus.h"
+#include "TVector3.h"
 
 ClassImp(KVSimNucleus)
 
@@ -34,6 +35,7 @@ void KVSimNucleus::Copy(TObject& obj) const
    KVNucleus::Copy(obj);
    ((KVSimNucleus&)obj).position = position;
    ((KVSimNucleus&)obj).angmom = angmom;
+
 }
 
 //___________________________
@@ -49,12 +51,67 @@ void KVSimNucleus::SetPosition(const TVector3& r)
    position = r;
 }
 
+//___________________________
+void KVSimNucleus::SetDensity(Double_t density)
+{
+   //set density of the nucleus in nuc/fm3
+   fDensity = density;
+}
+
+Double_t KVSimNucleus::GetDensity() const
+{
+   //get density of the nucleus in nuc/fm3
+   return fDensity;
+}
+
 
 //___________________________
 void KVSimNucleus::SetAngMom(Double_t lx, Double_t ly, Double_t lz)
 {
    //set the angular momentum of the nucleus
    angmom.SetXYZ(lx, ly, lz);
+}
+
+//________________________________________________________________________________________
+
+KVSimNucleus KVSimNucleus::operator+(const KVSimNucleus& rhs)
+{
+   // KVNucleus addition operator.
+   // Add two nuclei together to form a compound nucleus whose Z, A, momentum
+   // and excitation energy are calculated from energy and momentum conservation.
+
+   KVSimNucleus& lhs = *this;
+   Int_t ztot = lhs.GetZ() + rhs.GetZ();
+   Int_t atot = lhs.GetA() + ((KVNucleus&) rhs).GetA();
+   KVSimNucleus CN(ztot, atot);
+
+   Double_t etot = lhs.E() + rhs.E();
+   TVector3 ptot = lhs.GetMomentum() + rhs.GetMomentum();
+   CN.SetVect(ptot);
+   CN.SetT(etot);
+
+
+   TVector3 pos;
+   const TVector3* prhs = rhs.GetPosition();
+   pos.SetX(prhs->X()*rhs.GetA() + position.X()*lhs.GetA());
+   pos.SetY(prhs->Y()*rhs.GetA() + position.Y()*lhs.GetA());
+   pos.SetZ(prhs->Z()*rhs.GetA() + position.Z()*lhs.GetA());
+
+   pos *= 1. / (atot);
+   CN.SetPosition(pos);
+
+   return CN;
+
+}
+//________________________________________________________________________________________
+
+KVSimNucleus& KVSimNucleus::operator+=(const KVSimNucleus& rhs)
+{
+   //KVNucleus addition and assignment operator.
+
+   KVSimNucleus temp = (*this) + rhs;
+   (*this) = temp;
+   return *this;
 }
 
 Double_t KVSimNucleus::GetEnergyLoss(const TString& detname) const
@@ -103,8 +160,8 @@ TVector3 KVSimNucleus::GetExitPosition(const TString& detname) const
 void KVSimNucleus::Print(Option_t* t) const
 {
    KVNucleus::Print(t);
-   cout << "KVSimNucleus: Position : ";
+   std::cout << "KVSimNucleus: Position : ";
    position.Print();
-   cout << "KVSimNucleus: Ang. Mom. : ";
+   std::cout << "KVSimNucleus: Ang. Mom. : ";
    angmom.Print();
 }

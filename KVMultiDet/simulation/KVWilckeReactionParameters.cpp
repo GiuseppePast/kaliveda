@@ -67,39 +67,48 @@ void KVWilckeReactionParameters::init()
    LCRIT *= (-MU * mu_Wilcke * S * S * S / KVNucleus::hbar / KVNucleus::hbar);
    LCRIT = 7. / 5.*pow(LCRIT, 0.5);
 
-   fBSS = new TF1("BSS", this, &KVWilckeReactionParameters::VC, 0, 25, 0, "KVWilckeReactionParameters", "VC");
+   if (!fBSS) fBSS = new TF1("BSS", this, &KVWilckeReactionParameters::VC, 0, 25, 0, "KVWilckeReactionParameters", "VC");
    VC_RINT = fBSS->Eval(RINT);
-   fCMThetaQuart = new TF1("ThetaQuart", this, &KVWilckeReactionParameters::QuarterPointAngle, 0, 100, 0, "KVWilckeReactionParameters", "QuarterPointAngle");
-   fLmax = new TF1("LMAX", this, &KVWilckeReactionParameters::Lmax, 0, 100, 0, "KVWilckeReactionParameters", "Lmax");
-   fSigmaR = new TF1("SIGMA-R", this, &KVWilckeReactionParameters::SigmaR, 0, 100, 0, "KVWilckeReactionParameters", "SigmaR");
-   fProx = new TF1("PROX", this, &KVWilckeReactionParameters::ProxPot, 0, 25, 0, "KVWilckeReactionParameters", "ProxPot");
-   fPotential = new TF1("HIPOT", this, &KVWilckeReactionParameters::Potential, 0, 25, 0, "KVWilckeReactionParameters", "Potential");
-   fCentPot = new TF1("CENTPOT", this, &KVWilckeReactionParameters::CentrifugalPotential, 0, 25, 1, "KVWilckeReactionParameters", "CentrifugalPotential");
-   fCentPot->SetNpx(1000);
-   fCentPot->SetParName(0, "l [hbar]");
+   if (!fCMThetaQuart) fCMThetaQuart = new TF1("ThetaQuart", this, &KVWilckeReactionParameters::QuarterPointAngle, 0, 100, 0, "KVWilckeReactionParameters", "QuarterPointAngle");
+   if (!fLmax) fLmax = new TF1("LMAX", this, &KVWilckeReactionParameters::Lmax, 0, 100, 0, "KVWilckeReactionParameters", "Lmax");
+   if (!fSigmaR) fSigmaR = new TF1("SIGMA-R", this, &KVWilckeReactionParameters::SigmaR, 0, 100, 0, "KVWilckeReactionParameters", "SigmaR");
+   if (!fProx) fProx = new TF1("PROX", this, &KVWilckeReactionParameters::ProxPot, 0, 25, 0, "KVWilckeReactionParameters", "ProxPot");
+   if (!fPotential) fPotential = new TF1("HIPOT", this, &KVWilckeReactionParameters::Potential, 0, 25, 0, "KVWilckeReactionParameters", "Potential");
+   if (!fCentPot) {
+      fCentPot = new TF1("CENTPOT", this, &KVWilckeReactionParameters::CentrifugalPotential, 0, 25, 1, "KVWilckeReactionParameters", "CentrifugalPotential");
+      fCentPot->SetNpx(1000);
+      fCentPot->SetParName(0, "l [hbar]");
+   }
    VRB = fPotential->Eval(RBARRIER);
 
-   fSigmaFus = new TF1("SIGMA-FUS", this, &KVWilckeReactionParameters::SigmaFus, 0, 1.e+02, 0, "KVWilckeReactionParameters", "SigmaFus");
+   if (!fSigmaFus) fSigmaFus = new TF1("SIGMA-FUS", this, &KVWilckeReactionParameters::SigmaFus, 0, 1.e+02, 0, "KVWilckeReactionParameters", "SigmaFus");
 }
 
 KVWilckeReactionParameters::KVWilckeReactionParameters()
+   : fBSS(0), fProx(0), fPotential(0), fCMThetaQuart(0), fLmax(0), fSigmaR(0), fSigmaFus(0), fCentPot(0)
 {
    // Default constructor
-   init();
 }
 
 KVWilckeReactionParameters::KVWilckeReactionParameters(const KVNucleus& proj, const KVNucleus& targ)
+   : fBSS(0), fProx(0), fPotential(0), fCMThetaQuart(0), fLmax(0), fSigmaR(0), fSigmaFus(0), fCentPot(0)
 {
-   ZP = proj.GetZ();
-   AP = proj.GetA();
-   ZT = targ.GetZ();
-   AT = targ.GetA();
-   init();
+   SetEntranceChannel(proj, targ);
 }
 
 KVWilckeReactionParameters::~KVWilckeReactionParameters()
 {
    // Destructor
+}
+
+void KVWilckeReactionParameters::SetEntranceChannel(const KVNucleus& proj, const KVNucleus& targ)
+{
+   // (Re)set entrance channel to calculate
+   ZP = proj.GetZ();
+   AP = proj.GetA();
+   ZT = targ.GetZ();
+   AT = targ.GetA();
+   init();
 }
 
 
@@ -212,23 +221,58 @@ Double_t KVWilckeReactionParameters::PotentialPocketRadius(Double_t l)
 Double_t KVWilckeReactionParameters::GetMaximumAngularMomentumWithPocket()
 {
    // Retuns maximum angular momentum for which a pocket exists in the interaction potential
+   // which corresponds to a lower potential energy than the maximum
 
-   Double_t lmin, lmax;
-   lmin = 0;
-   lmax = 200;
-   Double_t l = lmin;
-   while (lmax > lmin) {
-      if (PotentialPocketRadius(l) > 0.) {
-         if (lmax - lmin == 2.0) return l;
-         lmin = l;
-      } else {
-         if (l < 1) return 0;
-         lmax = l;
-      }
-      if (lmax - lmin == 1.0) return lmin;
-      l = TMath::Nint((lmin + lmax) / 2.);
+//   Double_t lmin, lmax;
+//   lmin = 0;
+//   lmax = 200;
+//   Double_t l = lmin;
+//   while (lmax > lmin) {
+//      if (PotentialPocketRadius(l) > 0.) {
+//         if (lmax - lmin == 2.0) return l;
+//         lmin = l;
+//      } else {
+//         if (l < 1) return 0;
+//         lmax = l;
+//      }
+//      if (lmax - lmin == 1.0) return lmin;
+//      l = TMath::Nint((lmin + lmax) / 2.);
+//   }
+//   return 0;
+   Double_t l_last_pock = -1;
+   Double_t l = 0;
+   while (1) {
+      Double_t Rmax = PotentialMaximumRadius(l);
+      if (Rmax < 0) break;
+      Double_t Rmin = PotentialPocketRadius(l);
+      if (Rmin < 0) break;
+      if (GetCentrifugalPotential(l)->Eval(Rmin) >= GetCentrifugalPotential(l)->Eval(Rmax)) break;
+      else l_last_pock = l;
+      ++l;
    }
-   return 0;
+   return l_last_pock;
+}
+
+Double_t KVWilckeReactionParameters::PotentialMaximumRadius(Double_t l)
+{
+   // Find position (radial distance between centres) at which total potential has a
+   // maximum for the given angular momentum. Returns -1.0 if no maximum.
+
+   TF1Derivative df(GetCentrifugalPotential(l));
+   TF1Derivative df2(GetCentrifugalPotential(l), 2);
+
+   // look for extrema
+   Double_t rmax = 20.;
+   Double_t rmin = 5.0;
+   for (int i = 2; i; --i) {
+      rmin = df.GetX(0., rmin, rmax);
+      if (rmin == rmax) return -1.0; // no extrema
+      // Test min/max ?
+      if (df2.Eval(rmin) < 0) return rmin; // found minimum
+      // That was a minimum. Try again.
+      rmin += 0.1;
+   }
+   return -1.0;
 }
 
 Double_t KVWilckeReactionParameters::GetBassReactionCrossSection(Double_t e_sur_a)

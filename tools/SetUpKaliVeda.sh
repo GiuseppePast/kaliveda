@@ -61,29 +61,29 @@ fi
 #
 #                   handle version
 #
-VERS_FILE=${HOME}/.kalivedaversion
+VERS_FILE=$HOME/.kalivedaversion
 KVROOTVER="kvroot"
 if [ "$VERSION" == "" ]; then
-    if [[ -ef ${VERS_FILE} && ! (-z ${VERS_FILE}) ]]; then
-        VERSION=`cat ${VERS_FILE} | awk '{print $1}'`
-        if [ "${VERSION}" == "standard" ]; then
+    if [[ -e $VERS_FILE && -f $VERS_FILE && ! (-s $VERS_FILE) ]]; then
+        VERSION=`cat $VERS_FILE | awk '{print $1'`
+        if [ "$VERSION" == "standard" ]; then
             VERSION=""
         fi
         if [ "$VERSION" != "" ]; then
 	        echo "Using KaliVeda version $VERSION"
-            KVROOTVER="kvroot-${VERSION}"
+            KVROOTVER="kvroot-$VERSION"
         fi
     fi
 else
     echo "Setting KaliVeda version to $VERSION"
-    KVROOTVER="kvroot-${VERSION}"
+    KVROOTVER="kvroot-$VERSION"
 fi
 #
 #                   handle prefix
 #
 if [ "$PREFIX" == "" ]; then
-    if [[ -ef ${VERS_FILE} && ! (-z ${VERS_FILE} ) ]]; then
-        PREFIX=`cat ${VERS_FILE} | awk '{ print $2 }'`
+    if [[ -e $VERS_FILE && -f $VERS_FILE && ! (-s $VERS_FILE ) ]]; then
+        PREFIX=`cat $VERS_FILE | awk '{ print $2 '`
         if [ "$PREFIX" != "" ]; then
 	      echo "Using path : $PREFIX"
         fi
@@ -99,8 +99,8 @@ fi
 #
 #                   store new prefix and version
 #
-if [ ${NEED_TO_UPDATE} == 1 ]; then
-    if [ "${VERSION}" != "" ]; then
+if [ $NEED_TO_UPDATE == 1 ]; then
+    if [ "$VERSION" != "" ]; then
       echo $VERSION $PREFIX > $VERS_FILE
    else
       echo "standard $PREFIX" > $VERS_FILE
@@ -117,16 +117,16 @@ ROOTVER=`root-config --version | sed '/\//s//./g'`
 #
 #                   create installation directories if necessary
 #
-HOST_DIR_VER="${PREFIX}/.${KVROOTVER}_gcc-${GCCVER}_root-${ROOTVER}"
+HOST_DIR_VER="$PREFIX/.${KVROOTVER}_gcc-${GCCVER}_root-${ROOTVER}"
 #include machine type if not i386 (for backwards compatibility)
 if [ $MACHTYPE ]; then
     if [ "$MACHTYPE" != "i386" ]; then
         MACHT=`echo $MACHTYPE | cut -d '-' -f1`
-        HOST_DIR_VER="${PREFIX}/.${KVROOTVER}_gcc-${GCCVER}_${MACHT}_root-${ROOTVER}"
+        HOST_DIR_VER="$PREFIX/.${KVROOTVER}_gcc-${GCCVER}_${MACHT}_root-${ROOTVER}"
     fi
 fi
 
-HOST_DIR="${PREFIX}/.${KVROOTVER}"
+HOST_DIR="$PREFIX/.$KVROOTVER"
 SetUpKaliVedaDirectories.sh $HOST_DIR_VER $HOST_DIR
 #
 #                   set KVROOT
@@ -148,11 +148,11 @@ fi
 #
 #                   set paths
 #
-export PATH=${KVROOT}/bin:${KV_PATH_BACKUP}
+export PATH=$KVROOT/bin:$KV_PATH_BACKUP
 if [ "$KV_LDPATH_BACKUP" == "0" ]; then
-	   export LD_LIBRARY_PATH=${KVROOT}/lib
+	   export LD_LIBRARY_PATH=$KVROOT/lib
 else
-	   export LD_LIBRARY_PATH=${KVROOT}/lib:${KV_LDPATH_BACKUP}
+	   export LD_LIBRARY_PATH=$KVROOT/lib:$KV_LDPATH_BACKUP
 fi
 #
 #                   print result

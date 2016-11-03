@@ -27,3 +27,20 @@ KVFileReader::~KVFileReader()
    toks = 0;
 }
 
+//______________________
+KVFileReader::KVFileReader(const KVFileReader& obj) : KVBase()
+{
+   //copy ctor
+   init();
+   obj.Copy(*this);
+}
+
+//___________________________________________________________________________________
+
+void KVFileReader::Copy(TObject& obj) const
+{
+   //Copy this to obj
+   //Redefinition of KVBase::Copy
+
+   KVBase::Copy(obj);
+}

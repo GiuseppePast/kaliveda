@@ -22,14 +22,14 @@ ClassImp(KVAutoFit)
 // --> END_HTML
 ////////////////////////////////////////////////////////////////////////////////
 
-KVAutoFit::KVAutoFit()
+KVAutoFit::KVAutoFit(Bool_t batch)
 {
    // Default constructor
    //
    // le booleen is2D indique si les histo et donc les fonctions
    // doivent etre a 2D ou 1D
    // par defaut is2D= kFALSE dans la methode init
-
+   fBatch = batch;
    SetName("KVAutoFit");
    init();
    Clear();
@@ -39,34 +39,44 @@ KVAutoFit::KVAutoFit()
 
 }
 
+KVAutoFit::KVAutoFit()
+{
+   // Default constructor
+   //
+
+}
+
 //________________________________________________________________
 void KVAutoFit::init()
 {
    lfunc = new KVHashList();
    lfunc->SetOwner(kTRUE);
    userdefined = kFALSE;
+   c1 = 0;
+   lplabel = 0;
+   if (!fBatch) {
+      c1 = new TCanvas(Form("%s_canvas", GetName()), Form("%s_canvas", GetName()), 0, 0, 1200, 600);
 
-   c1 = new TCanvas(Form("%s_canvas", GetName()), Form("%s_canvas", GetName()), 0, 0, 1200, 600);
+      c1->AddExec("interval", "ap->GetInterval()");
+      c1->AddExec("recommence", "ap->Recommence()");
+      c1->AddExec("gather", "ap->Gather()");
 
-   c1->AddExec("interval", "ap->GetInterval()");
-   c1->AddExec("recommence", "ap->Recommence()");
-   c1->AddExec("gather", "ap->Gather()");
+      lplabel = new KVHashList();
+      lplabel->SetOwner(kTRUE);
+      lplabel->Add(new TPaveLabel(0.10, 0.92, 0.25, 0.99, "Annule Tout", "NDC"));
+      lplabel->Add(new TPaveLabel(0.27, 0.92, 0.44, 0.99, "Annule Dernier", "NDC"));
+      lplabel->Add(new TPaveLabel(0.46, 0.92, 0.55, 0.99, "Gather", "NDC"));
+      lplabel->Add(new TPaveLabel(0.57, 0.92, 0.65, 0.99, "Suivant", "NDC"));
+
+      lplabel->Execute("SetTextSize", "0.625");
+      lplabel->Execute("SetFillColor", "10");
+   }
 
    hfit = 0;
    hclone = 0;
 
    f1Dfit = 0;
    f2Dfit = 0;
-
-   lplabel = new KVHashList();
-   lplabel->SetOwner(kTRUE);
-   lplabel->Add(new TPaveLabel(0.10, 0.92, 0.25, 0.99, "Annule Tout", "NDC"));
-   lplabel->Add(new TPaveLabel(0.27, 0.92, 0.44, 0.99, "Annule Dernier", "NDC"));
-   lplabel->Add(new TPaveLabel(0.46, 0.92, 0.55, 0.99, "Gather", "NDC"));
-   lplabel->Add(new TPaveLabel(0.57, 0.92, 0.65, 0.99, "Suivant", "NDC"));
-
-   lplabel->Execute("SetTextSize", "0.625");
-   lplabel->Execute("SetFillColor", "10");
 
    gStyle->SetOptTitle(0);
 
@@ -112,7 +122,7 @@ void KVAutoFit::Clear(Option_t*)
    //Efface les fonctions de fit
    //et le contenu du canvas
    lfunc->Clear();
-   c1->Clear();
+   if (!fBatch) c1->Clear();
    ClearRange();
 
 }
@@ -135,19 +145,24 @@ KVAutoFit::~KVAutoFit()
    Clear();
 
    delete lfunc;
-   delete c1;
+   if (!fBatch) {
+      delete c1;
+      delete lplabel;
+   }
    hfit = 0;
-   if (hclone) delete hclone;
+   if (hclone)
+      delete hclone;
    hclone = 0;
    f1Dfit = 0;
    f2Dfit = 0;
-   delete lplabel;
 
 }
 
 //________________________________________________________________
 void KVAutoFit::SetHistos(KVHashList* lh, TString option)
 {
+   if (fBatch)
+      return;
 
    if (option == "all") {
       Info("SetHistos", "On s'occupe de tous les histos de la liste");
@@ -171,6 +186,9 @@ void KVAutoFit::SetHistos(KVHashList* lh, TString option)
 //________________________________________________________________
 void KVAutoFit::NextHisto()
 {
+
+   if (fBatch)
+      return;
 
    if (!lhisto) return;
 
@@ -294,6 +312,9 @@ Double_t KVAutoFit::f1D(Double_t*, Double_t*)
 void KVAutoFit::SetHisto(TH1* hh)
 {
 
+   if (fBatch)
+      return;
+
    Clear();
 
    Bool_t ok = kFALSE;
@@ -333,6 +354,9 @@ void KVAutoFit::SetHisto(TH1* hh)
 //________________________________________________________________
 void KVAutoFit::GetInterval()
 {
+
+   if (fBatch)
+      return;
 
    Int_t event = gPad->GetEvent();
    TObject* select = gPad->GetSelected();
@@ -401,6 +425,9 @@ void KVAutoFit::GetInterval()
 void KVAutoFit::Recommence()
 {
 
+   if (fBatch)
+      return;
+
    Int_t event = gPad->GetEvent();
    TObject* select = gPad->GetSelected();
    if (!select) return;
@@ -430,6 +457,9 @@ void KVAutoFit::Recommence()
 //________________________________________________________________
 void KVAutoFit::Gather()
 {
+
+   if (fBatch)
+      return;
 
    Int_t event = gPad->GetEvent();
    TObject* select = gPad->GetSelected();
@@ -538,7 +568,8 @@ void KVAutoFit::Relecture(const Char_t* name)
             }
 
             lfunc->Add(freload);
-            freload->Draw("same");
+            if (!fBatch)
+               freload->Draw("same");
 
          }
       }
@@ -590,7 +621,8 @@ void KVAutoFit::Relecture(const Char_t* name)
             }
 
             lfunc->Add(freload);
-            freload->Draw("cont2,same");
+            if (!fBatch)
+               freload->Draw("cont2,same");
 
          }
       }
@@ -598,6 +630,7 @@ void KVAutoFit::Relecture(const Char_t* name)
 
 
    fin.close();
+   Info("Relecture", "done");
 
 
 }

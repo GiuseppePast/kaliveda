@@ -6,9 +6,11 @@
 #include "KVNumberList.h"
 #include "KVDataSetManager.h"
 #include "KVRunListLine.h"
-#include "KVFileReader.h"
+
 #include "KVDBParameterList.h"
 #include "KVDBParameterSet.h"
+#include "IRODS.h"
+#include "TRandom.h"
 
 KVFAZIADB* gFaziaDB;
 
@@ -26,26 +28,26 @@ ClassImp(KVFAZIADB)
 void KVFAZIADB::init()
 {
    //default initialisations
-   kFirstRun = 0;
-   kLastRun = 0;
 
-   fRuns = AddTable("Runs", "List of available runs");
-   fRuns->SetDefaultFormat("Run %d"); // default format for run names
-   fSystems = AddTable("Systems", "List of available systems");
    fExceptions = AddTable("Exceptions", "List signals with different PSA parameters");
    fCalibrations = AddTable("Calibrations", "Available calibration for FAZIA detectors");
    fOoODets = AddTable("Calibrations", "Available calibration for FAZIA detectors");
+   //filenames to manage the data transfer via IRODS
+   fDONEfile = "FromKVFAZIADB_transferdone.list";
+   fFAILEDfile = "FromKVFAZIADB_transferfailed.list";
+
+   Info("init", "file names for tranfert:\n%s\n%s", fDONEfile.Data(), fFAILEDfile.Data());
 }
 
-KVFAZIADB::KVFAZIADB(const Char_t* name): KVDataBase(name,
+KVFAZIADB::KVFAZIADB(const Char_t* name): KVExpDB(name,
          "FAZIA experiment parameter database")
 {
    init();
 }
 
 
-KVFAZIADB::KVFAZIADB(): KVDataBase("KVFAZIADB",
-                                      "FAZIA experiment parameter database")
+KVFAZIADB::KVFAZIADB(): KVExpDB("KVFAZIADB",
+                                   "FAZIA experiment parameter database")
 {
    init();
 }
@@ -66,35 +68,13 @@ void KVFAZIADB::cd()
    gFaziaDB = this;
 
 }
-//__________________________________________________________________________________________________________________
 
-Bool_t KVFAZIADB::OpenCalibFile(const Char_t* type, std::ifstream& fs) const
-{
-   //Find and open calibration parameter file of given type. Return kTRUE if all OK.
-   //types are defined in $KVROOT/KVFiles/.kvrootrc by lines such as
-   //
-   //# Default name for file describing systems for each dataset.
-   //INDRADB.Systems:     Systems.dat
-   //
-   //A file with the given name will be looked for in $KVROOT/KVFiles/name_of_dataset
-   //where name_of_dataset is given by KVDataBase::fDataSet.Data()
-   //i.e. the name of the associated dataset.
-   //
-   //Filenames specific to a given dataset may also be defined:
-   //
-   //INDRA_camp5.INDRADB.Pedestals:      Pedestals5.dat
-   //
-   //where 'INDRA_camp5' is the name of the dataset in question.
-   //GetDBEnv() always returns the correct filename for the currently active dataset.
-
-   return KVBase::SearchAndOpenKVFile(GetDBEnv(type), fs, fDataSet.Data());
-}
 //__________________________________________________________________________________________________________________
 
 const Char_t* KVFAZIADB::GetDBEnv(const Char_t* type) const
 {
-   //Will look for gEnv->GetValue name "name_of_dataset.INDRADB.type"
-   //then "INDRADB.type" if no dataset-specific value is found.
+   //Will look for gEnv->GetValue name "name_of_dataset.FAZIADB.type"
+   //then "FAZIADB.type" if no dataset-specific value is found.
 
    if (!gDataSetManager)
       return "";
@@ -102,249 +82,6 @@ const Char_t* KVFAZIADB::GetDBEnv(const Char_t* type) const
    if (!ds)
       return "";
    return ds->GetDataSetEnv(Form("FAZIADB.%s", type));
-}
-
-//_____________________________________________________________________
-void KVFAZIADB::LinkRecordToRunRange(KVDBRecord* rec, UInt_t first_run,
-                                     UInt_t last_run)
-{
-   //If the KVDBRecord 'rec' (i.e. set of calibration parameters, reaction system, etc.) is
-   //associated to, or valid for, a range of runs, we use this method in order to link the record
-   //and the runs. The list of associated runs will be kept with the record, and each of the runs
-   //will have a link to the record.
-
-   for (UInt_t ii = first_run; ii <= last_run; ii++) {
-      LinkRecordToRun(rec, ii);
-   }
-}
-//_____________________________________________________________________
-void KVFAZIADB::LinkRecordToRunRange(KVDBRecord* rec, KVNumberList nl)
-{
-   //If the KVDBRecord 'rec' (i.e. set of calibration parameters, reaction system, etc.) is
-   //associated to, or valid for, a range of runs, we use this method in order to link the record
-   //and the runs. The list of associated runs will be kept with the record, and each of the runs
-   //will have a link to the record.
-   nl.Begin();
-   while (!nl.End()) {
-      Int_t rr = nl.Next();
-      //Info("LinkRecordToRunRange","run number %d",rr);
-      LinkRecordToRun(rec, rr);
-   }
-}
-
-//_____________________________________________________________________
-void KVFAZIADB::LinkRecordToRun(KVDBRecord* rec, Int_t rnumber)
-{
-
-   KVFAZIADBRun* run = GetRun(rnumber);
-   if (run)
-      rec->AddLink("Runs", run);
-
-}
-
-//_____________________________________________________________________
-void KVFAZIADB::LinkRecordToRunRanges(KVDBRecord* rec, UInt_t rr_number,
-                                      UInt_t run_ranges[][2])
-{
-   //Call LinkRecordToRunRange for a set of run ranges stored in the two-dimensional array
-   //in the following way:
-   //      run_ranges[0][0] = first run of first run range
-   //      run_ranges[0][1] = last run of first run range
-   //      run_ranges[1][0] = first run of second run range etc. etc.
-   //rr_number is the number of run ranges in the array
-
-   for (UInt_t i = 0; i < rr_number; i++) {
-      LinkRecordToRunRange(rec, run_ranges[i][0], run_ranges[i][1]);
-   }
-}
-
-//______________________________________________________________________________
-void KVFAZIADB::LinkListToRunRanges(TList* list, UInt_t rr_number,
-                                    UInt_t run_ranges[][2])
-{
-   //Link the records contained in the list to the set of runs (see LinkRecordToRunRanges).
-
-   if (!list) {
-      Error("LinkListToRunRanges",
-            "NULL pointer passed for parameter TList");
-      return;
-   }
-   if (list->GetSize() == 0) {
-      Error("LinkListToRunRanges(TList*,UInt_t,UInt_t*)",
-            "The list is empty");
-      return;
-   }
-   TIter next(list);
-   KVDBRecord* rec;
-   for (UInt_t ru_ra = 0; ru_ra < rr_number; ru_ra++) {
-      UInt_t first_run = run_ranges[ru_ra][0];
-      UInt_t last_run = run_ranges[ru_ra][1];
-      for (UInt_t i = first_run; i <= last_run; i++) {
-         KVFAZIADBRun* run = GetRun(i);
-         while ((rec = (KVDBRecord*) next())) {
-            if (run)
-               rec->AddLink("Runs", run);
-         }
-         next.Reset();
-      }
-   }
-}
-//______________________________________________________________________________
-void KVFAZIADB::LinkListToRunRange(TList* list, KVNumberList nl)
-{
-   //Link the records contained in the list to the set of runs (see LinkRecordToRunRanges).
-
-   if (!list) {
-      Error("LinkListToRunRange",
-            "NULL pointer passed for parameter TList");
-      return;
-   }
-   if (list->GetSize() == 0) {
-      Error("LinkListToRunRange(TList*,KVNumberList)",
-            "The list is empty");
-      return;
-   }
-   TIter next(list);
-   KVDBRecord* rec;
-   while ((rec = (KVDBRecord*) next())) {
-      LinkRecordToRunRange(rec, nl);
-   }
-}
-
-//____________________________________________________________________________
-void KVFAZIADB::ReadSystemList()
-{
-   //Reads list of systems with associated run ranges, creates KVDBSystem
-   //records for these systems, and links them to the appropriate KVFAZIADBRun
-   //records using LinkListToRunRanges.
-   //
-   //There are 2 formats for the description of systems:
-   //
-   //+129Xe + natSn 25 MeV/A           '+' indicates beginning of system description
-   //129 54 119 50 0.1 25.0            A,Z of projectile and target, target thickness (mg/cm2), beam energy (MeV/A)
-   //Run Range : 614 636               runs associated with system
-   //Run Range : 638 647               runs associated with system
-   //
-   //This is sufficient in the simple case where the experiment has a single
-   //layer target oriented perpendicular to the beam. However, for more
-   //complicated targets we can specify as follows :
-   //
-   //+155Gd + 238U 36 MeV/A
-   //155 64 238 92 0.1 36.0
-   //Target : 3 0.0                    target with 3 layers, angle 0 degrees
-   //C 0.02                            1st layer : carbon, 20 g/cm2
-   //238U 0.1                          2nd layer : uranium-238, 100 g/cm2
-   //C 0.023                           3rd layer : carbon, 23 g/cm2
-   //Run Range : 770 804
-   //
-   //Lines beginning '#' are comments.
-
-
-   std::ifstream fin;
-   if (OpenCalibFile("Systems", fin)) {
-      Info("ReadSystemList()", "Reading Systems parameters ...");
-
-      TString line;
-
-      char next_char = fin.peek();
-      while (next_char != '+' && fin.good()) {
-         line.ReadLine(fin, kFALSE);
-         next_char = fin.peek();
-      }
-
-      while (fin.good() && !fin.eof() && next_char == '+') {
-         KVDBSystem* sys = new KVDBSystem("NEW SYSTEM");
-         AddSystem(sys);
-         sys->Load(fin);
-         next_char = fin.peek();
-      }
-      fin.close();
-   } else {
-      Error("ReadSystemList()", "Could not open file %s",
-            GetCalibFileName("Systems"));
-   }
-   // if any runs are not associated with any system
-   // we create an 'unknown' system and associate it to all runs
-   KVDBSystem* sys = 0;
-   TIter nextRun(GetRuns());
-   KVFAZIADBRun* run;
-   while ((run = (KVFAZIADBRun*)nextRun())) {
-      if (!run->GetSystem()) {
-         if (!sys) {
-            sys = new KVDBSystem("[unknown]");
-            AddSystem(sys);
-         }
-         sys->AddRun(run);
-      }
-   }
-
-   // rehash the record table now that all names are set
-   fSystems->Rehash();
-}
-
-void KVFAZIADB::WriteSystemsFile() const
-{
-   //Write the 'Systems.dat' file for this database.
-   //The actual name of the file is given by the value of the environment variable
-   //[dataset_name].INDRADB.Systems (if it exists), otherwise the value of
-   //INDRADB.Systems is used. The file is written in the
-   //$KVROOT/[dataset_directory] directory.
-
-   std::ofstream sysfile;
-   KVBase::SearchAndOpenKVFile(GetDBEnv("Systems"), sysfile, fDataSet.Data());
-   TIter next(GetSystems());
-   KVDBSystem* sys;
-   TDatime now;
-   sysfile << "# " << GetDBEnv("Systems") << " file written by "
-           << ClassName() << "::WriteSystemsFile on " << now.AsString() << std::endl;
-   std::cout << GetDBEnv("Systems") << " file written by "
-             << ClassName() << "::WriteSystemsFile on " << now.AsString() << std::endl;
-   while ((sys = (KVDBSystem*)next())) {
-      if (strcmp(sys->GetName(), "[unknown]")) { //do not write dummy 'unknown' system
-         sys->Save(sysfile);
-         sysfile << std::endl;
-      }
-   }
-   sysfile.close();
-}
-
-//__________________________________________________________________________________________________________________
-
-void KVFAZIADB::Save(const Char_t* what)
-{
-   //Save (in the appropriate text file) the informations on:
-   // what = "Systems" : write Systems.dat file
-   // what = "Runlist" : write Runlist.csv
-   if (!strcmp(what, "Systems")) WriteSystemsFile();
-   else if (!strcmp(what, "Runlist")) WriteRunListFile();
-}
-
-void KVFAZIADB::WriteRunListFile() const
-{
-   //Write a file containing a line describing each run in the database.
-   //The delimiter symbol used in each line is '|' by default.
-   //The first line of the file will be a header description, given by calling
-   //KVFAZIADBRun::WriteRunListHeader() for the first run in the database.
-   //Then we call KVFAZIADBRun::WriteRunListLine() for each run.
-   //These are virtual methods redefined by child classes of KVFAZIADBRun.
-
-   std::ofstream rlistf;
-   KVBase::SearchAndOpenKVFile(GetDBEnv("Runlist"), rlistf, fDataSet.Data());
-   TDatime now;
-   rlistf << "# " << GetDBEnv("Runlist") << " file written by "
-          << ClassName() << "::WriteRunListFile on " << now.AsString() << std::endl;
-   std::cout << GetDBEnv("Runlist") << " file written by "
-             << ClassName() << "::WriteRunListFile on " << now.AsString() << std::endl;
-   TIter next_run(GetRuns());
-   //write header in file
-   ((KVFAZIADBRun*) GetRuns()->At(0))->WriteRunListHeader(rlistf, GetDBEnv("Runlist.Separator")[0]);
-   KVFAZIADBRun* run;
-   while ((run = (KVFAZIADBRun*) next_run())) {
-
-      run->WriteRunListLine(rlistf, GetDBEnv("Runlist.Separator")[0]);
-
-   }
-   rlistf.close();
 }
 
 //__________________________________________________________________________________________________________________
@@ -541,57 +278,125 @@ void KVFAZIADB::ReadNewRunList()
 }
 
 //____________________________________________________________________________
-void KVFAZIADB::ReadDBFile(TString file)
+Bool_t KVFAZIADB::TransferAcquisitionFileToCcali(TString file, TString ccali_rep, TString option)
 {
+//Perform the tranfer via irods to ccali for the indicated directory [file]
+//return status of the iput command
+// OK if the transfer is done
+// not OK if it has failed
+//
+
+   IRODS ir;
+   Int_t retour = ir.put(
+                     Form("-%s %s", option.Data(), file.Data()),
+                     Form("%s/%s/%s", ccali_rep.Data(), gDataSet->GetDataPathSubdir(), gDataSet->GetDataTypeSubdir("bin"))
+                  );
+   return (retour == 0);
+
+   /*
+   //some lines to test all the process
+   Double_t val = gRandom->Uniform(0,1);
+   printf("%s %lf\n",file.Data(),val);
+   return (val<0.5);
+   */
+
+}
+
+//____________________________________________________________________________
+Bool_t KVFAZIADB::TransferRunToCcali(Int_t run, TString path, TString ccali_rep, TString option)
+{
+// test the status of the transfer
+// write to the corresponding file : done or failed
+//
+
+   Bool_t retour = TransferAcquisitionFileToCcali(Form("%s/run%06d", path.Data(), run), ccali_rep, option);
+   if (retour) {
+      FILE* ff = fopen(fDONEfile.Data(), "a");
+      fprintf(ff, "%d\n", run);
+      fclose(ff);
+   } else {
+      FILE* ff = fopen(fFAILEDfile.Data(), "a");
+      fprintf(ff, "%d\n", run);
+      fclose(ff);
+   }
+
+   return retour;
+
+}
+
+//____________________________________________________________________________
+void KVFAZIADB::TransferRunListToCcali(KVNumberList lrun, TString path, TString ccali_rep, TString option)
+{
+
+//Remove file where failed tranfer runs are listed
+//
+   KVNumberList lFAILED;
+   gSystem->Exec(Form("rm %s", fFAILEDfile.Data()));
+
+//Loop on run list
+//If transfer fails, the run number is kept in a kvnumberlist
+//for status at the end
+//
+   lrun.Begin();
+   while (!lrun.End()) {
+      Int_t run = lrun.Next();
+      if (!TransferRunToCcali(run, path, ccali_rep, option)) {
+         lFAILED.Add(run);
+      }
+   }
+
+//print list of failed tranfers
+   if (!lFAILED.IsEmpty())
+      Warning("TransferRunListToCcali", "Transfer failed for %d runs :\n%s", lFAILED.GetNValues(), lFAILED.AsString());
+
+}
+
+//____________________________________________________________________________
+void KVFAZIADB::StartTransfer(TString filename, TString ccali_rep, TString option)
+{
+
+   Int_t run;
+   TString datadir = "";
+
+//-----------
+// list of runs for which transfer failed during the last tentative
+//-----------
+   KVNumberList lFAILED;
    KVFileReader fr;
-   fr.OpenFileToRead(file.Data());
-   KVFAZIADBRun* run = new KVFAZIADBRun();
-   KVFAZIADBRun* ref = new KVFAZIADBRun();
-
-   KVNumberList lmismatch;
-   KVNumberList lok;
-   KVNumberList lnotpresent;
-   KVString datadir = "";
-
-   FILE* fok = fopen("FromKVFAZIADB_runlist_ok.dat", "w");
-   FILE* fnotpresent = fopen("FromKVFAZIADB_runlist_notpresent.dat", "w");
-   FILE* fmismatch = fopen("FromKVFAZIADB_runlist_mismatch.dat", "w");
-   FILE* ftobetransfered = fopen("FromKVFAZIADB_runlist_tobetransfered.dat", "w");
-
-   //list of runs whith status transfer=OK
-   //
-   // generated by irods transfer script
-   KVNumberList ltransfered;
-   if (gSystem->Exec("test -s donerunlist.dat") == 0) { //test existing non empty file
-      KVFileReader fr_transfered;
-      fr_transfered.OpenFileToRead("donerunlist.dat");
-      while (fr_transfered.IsOK()) {
-         fr_transfered.ReadLine(0);
-         if (fr_transfered.GetCurrentLine() != "") {
-            Int_t rnum = fr_transfered.GetCurrentLine().Atoi();
-            ltransfered.Add(rnum);
-         }
+   fr.OpenFileToRead(fFAILEDfile.Data());
+   while (fr.IsOK()) {
+      fr.ReadLine(0);
+      if (fr.GetCurrentLine() != "") {
+         run = fr.GetCurrentLine().Atoi();
+         lFAILED.Add(run);
       }
-      fr_transfered.CloseFile();
    }
+   fr.CloseFile();
 
-   //list of runs already labelled OK (Backward compatibility)
-   //
-   KVNumberList lalreadyok;
-   if (gSystem->Exec("test -s runlist_ok.dat") == 0) { //test existing non empty file
-      KVFileReader fr_alreadyok;
-      fr_alreadyok.OpenFileToRead("runlist_ok.dat");
-      while (fr_alreadyok.IsOK()) {
-         fr_alreadyok.ReadLine(0);
-         if (fr_alreadyok.GetCurrentLine() != "") {
-            Int_t rnum = fr_alreadyok.GetCurrentLine().Atoi();
-            lalreadyok.Add(rnum);
-         }
+//-----------
+// list of runs for which transfer succeeded since the beginning
+//-----------
+   KVNumberList lDONE;
+   fr.Clear();
+   fr.OpenFileToRead(fDONEfile.Data());
+   while (fr.IsOK()) {
+      fr.ReadLine(0);
+      if (fr.GetCurrentLine() != "") {
+         run = fr.GetCurrentLine().Atoi();
+         lDONE.Add(run);
       }
-      fr_alreadyok.CloseFile();
    }
+   if (lDONE.GetNValues() > 0)
+      Info("StartTransfer", "%d runs already tranfered:\n%s", lDONE.GetNValues(), lDONE.AsString());
+   fr.CloseFile();
 
-   //loop on list of runs in local repository
+//-----------
+// all runs produced
+//-----------
+
+   KVNumberList lALL;
+   fr.Clear();
+   fr.OpenFileToRead(filename.Data());
    while (fr.IsOK()) {
 
       fr.ReadLine("|");
@@ -604,9 +409,6 @@ void KVFAZIADB::ReadDBFile(TString file)
          if (!line.End() && name == "--dir") {
             datadir = line.Next();
             Info("ReadDBFile", "acquisition file directory: %s", datadir.Data());
-            fprintf(fok, "%s\n", datadir.Data());
-            fprintf(fnotpresent, "%s\n", datadir.Data());
-            fprintf(fmismatch, "%s\n", datadir.Data());
          }
       } else {
          if (datadir == "") {
@@ -627,33 +429,9 @@ void KVFAZIADB::ReadDBFile(TString file)
                   value = value.Strip(TString::kBoth);
                }
                if (name == "run") {
-                  run->SetNumber(value.Atoi());
-               } else if (name == "nfiles") {
-                  run->SetNumberOfAcqFiles(value.Atoi());
-               }
-            }
-            if ((ref = GetRun(run->GetNumber()))) {
-               if (run->GetNumberOfAcqFiles() != ref->GetNumberOfAcqFiles()) {
-                  if (!(lalreadyok.Contains(run->GetNumber()) || ltransfered.Contains(run->GetNumber()))) {
-                     lmismatch.Add(run->GetNumber());
-                     fprintf(fmismatch, "%d\n", run->GetNumber());
-                     fprintf(ftobetransfered, "%d\n", run->GetNumber());
-                  } else {
-                     lok.Add(run->GetNumber());
-                     fprintf(fok, "%d\n", run->GetNumber());
-                  }
-               } else {
-                  lok.Add(run->GetNumber());
-                  fprintf(fok, "%d\n", run->GetNumber());
-               }
-            } else {
-               if (!(lalreadyok.Contains(run->GetNumber()) || ltransfered.Contains(run->GetNumber()))) {
-                  lnotpresent.Add(run->GetNumber());
-                  fprintf(fnotpresent, "%d\n", run->GetNumber());
-                  fprintf(ftobetransfered, "%d\n", run->GetNumber());
-               } else {
-                  lok.Add(run->GetNumber());
-                  fprintf(fok, "%d\n", run->GetNumber());
+                  run = value.Atoi();
+                  if (!lDONE.Contains(run))
+                     lALL.Add(run);
                }
             }
          }
@@ -661,59 +439,94 @@ void KVFAZIADB::ReadDBFile(TString file)
    }
    fr.CloseFile();
 
-   Info("ReadDBFile", "To resume ...");
-   printf("---\nruns OK:\nnumber: %d\nlist: ", lok.GetNValues());
-   std::cout << lok.AsString() << std::endl;
-   printf("---\nruns not present:\nnumber: %d\nlist: ", lnotpresent.GetNValues());
-   std::cout << lnotpresent.AsString() << std::endl;
-   printf("---\nruns with mismatch:\nnumber: %d\nlist: ", lmismatch.GetNValues());
-   std::cout << lmismatch.AsString() << std::endl;
+   if (lALL.GetNValues() > 0) {
+      Info("StartTransfer", "Start transfer for %d runs:\n%s", lALL.GetNValues(), lALL.AsString());
+      TransferRunListToCcali(lALL, datadir.Data(), ccali_rep, option);
+   } else
+      Info("StartTransfer", "no runs to tranfer ...");
 
-   fclose(fok);
-   fclose(fnotpresent);
-   fclose(fmismatch);
-   fclose(ftobetransfered);
+}
 
-   delete run;
-   delete ref;
+
+//__________________________________________________________________________________________________________________
+const Char_t* KVFAZIADB::GetFileName(const Char_t* meth, const Char_t* keyw)
+{
+
+   TString basic_name = GetCalibFileName(keyw);
+   if (basic_name == "") {
+      Info(meth, "No name found for \"%s\" file", keyw);
+      return "";
+   }
+   Info(meth, "Search for %s for dataset %s ...", basic_name.Data(), gDataSet->GetName());
+   static TString fp;
+   gDataSet->SearchKVFile(basic_name.Data(), fp, gDataSet->GetName());
+   if (fp == "") {
+      Info(meth, "\tNo file found ...");
+      return "";
+   }
+   return fp.Data();
+
+}
+
+//__________________________________________________________________________________________________________________
+KVFileReader* KVFAZIADB::GetKVFileReader(const Char_t* meth, const Char_t* keyw)
+{
+
+   TString fp = GetFileName(meth, keyw);
+   if (fp == "")
+      return 0;
+
+   KVFileReader* fr = new KVFileReader();
+   if (!fr->OpenFileToRead(fp.Data())) {
+      Error(meth, "Error in opening file %s", fp.Data());
+      delete fr;
+      return 0;
+   }
+
+   Info(meth, "Reading %s file", fp.Data());
+   return fr;
+
+}
+
+//__________________________________________________________________________________________________________________
+TEnv* KVFAZIADB::GetFileTEnv(const Char_t* meth, const Char_t* keyw)
+{
+
+   TString fp = GetFileName(meth, keyw);
+   if (fp == "")
+      return 0;
+
+   Info(meth, "Reading %s file", fp.Data());
+   TEnv* env = new TEnv();
+   env->ReadFile(fp.Data(), kEnvAll);
+   return env;
+
 }
 
 //__________________________________________________________________________________________________________________
 void KVFAZIADB::ReadExceptions()
 {
-   if (!strcmp(GetCalibFileName("Exceptions"), "")) {
-      Info("ReadExceptions()", "No file found for Exceptions");
+   KVFileReader* fr = GetKVFileReader("ReadExceptions()", "Exceptions");
+   if (!fr)
       return;
-   }
 
-   TString fp;
-   gDataSet->SearchKVFile(GetCalibFileName("Exceptions"), fp, gDataSet->GetName());
-
-   KVFileReader fr;
-   if (!fr.OpenFileToRead(fp.Data())) {
-      Error("ReadExceptions()", "Error in opening file %s\n", fp.Data());
-      return;
-   }
-
-   Info("ReadExceptions()", "Reading exceptions ...");
    TList* ll = new TList();
    KVNumberList lruns;
    KVDBParameterList* dbp = 0;
 
    ll->SetOwner(kFALSE);
-   while (fr.IsOK()) {
-      fr.ReadLine(":");
-      if (fr.GetNparRead() == 2) {
-         if (fr.GetReadPar(0) == "RunRange") {
+   while (fr->IsOK()) {
+      fr->ReadLine(":");
+      if (fr->GetNparRead() == 2) {
+         if (fr->GetReadPar(0) == "RunRange") {
             if (ll->GetEntries() > 0) {
-               printf("\t linkage avec les runs\n");
                LinkListToRunRange(ll, lruns);
                ll->Clear();
             }
-            lruns.SetList(fr.GetReadPar(1));
-            printf("nouvelle plage : %s\n", lruns.AsString());
+            lruns.SetList(fr->GetReadPar(1));
+            //printf("nouvelle plage : %s\n", lruns.AsString());
          } else {
-            KVString name(fr.GetReadPar(0));
+            KVString name(fr->GetReadPar(0));
             name.Begin(".");
             KVString sdet = name.Next();
 
@@ -721,8 +534,6 @@ void KVFAZIADB::ReadExceptions()
             if (sig == "QH1" || sig == "QL1" || sig == "I1")   sdet.Prepend("SI1-");
             else if (sig == "Q2" || sig == "I2")        sdet.Prepend("SI2-");
             else if (sig == "Q3")                   sdet.Prepend("CSI-");
-
-            printf("sdet=%s\n", sdet.Data());
 
             KVString par = name.Next();
             if (!(dbp = (KVDBParameterList*)ll->FindObject(Form("%s.%s", sdet.Data(), sig.Data())))) {
@@ -734,55 +545,41 @@ void KVFAZIADB::ReadExceptions()
                dbp->GetParameters()->SetValue("Detector", sdet.Data());
                dbp->GetParameters()->SetValue("Signal", sig.Data());
             }
-            dbp->GetParameters()->SetValue(par.Data(), fr.GetDoubleReadPar(1));
-
-            printf("\t%s %s %s %lf\n", sdet.Data(), sig.Data(), par.Data(), fr.GetDoubleReadPar(1));
+            dbp->GetParameters()->SetValue(par.Data(), fr->GetDoubleReadPar(1));
          }
       }
    }
 
    if (ll->GetEntries() > 0) {
-      printf("\t linkage avec les runs\n");
       LinkListToRunRange(ll, lruns);
       ll->Clear();
    }
 
    delete ll;
+   delete fr;
 
 }
 //__________________________________________________________________________________________________________________
 void KVFAZIADB::ReadComments()
 {
-
-   if (!strcmp(GetCalibFileName("Comments"), "")) {
-      Info("ReadComments()", "No file foud for Comments");
+   KVFileReader* fr = GetKVFileReader("ReadComments()", "Comments");
+   if (!fr)
       return;
-   }
-   TString fp;
-   gDataSet->SearchKVFile(GetCalibFileName("Comments"), fp, gDataSet->GetName());
 
-
-   KVFileReader fr;
-   if (!fr.OpenFileToRead(fp.Data())) {
-      Error("ReadComments()", "Error in opening file %s\n", fp.Data());
-      return;
-   }
-
-   Info("ReadComments()", "Reading comments ...");
    KVFAZIADBRun* dbrun = 0;
-   while (fr.IsOK()) {
-      fr.ReadLine("|");
-      if (fr.GetCurrentLine().BeginsWith("#")) {
+   while (fr->IsOK()) {
+      fr->ReadLine("|");
+      if (fr->GetCurrentLine().BeginsWith("#")) {
 
-      } else if (fr.GetCurrentLine() == "") {
+      } else if (fr->GetCurrentLine() == "") {
 
       } else {
-         if (fr.GetNparRead() == 2) {
-            KVString srun(fr.GetReadPar(0));
+         if (fr->GetNparRead() == 2) {
+            KVString srun(fr->GetReadPar(0));
             srun.Begin("=");
             srun.Next();
             KVNumberList lruns(srun.Next());
-            KVString comments(fr.GetReadPar(1));
+            KVString comments(fr->GetReadPar(1));
             lruns.Begin();
             while (!lruns.End()) {
                Int_t run = lruns.Next();
@@ -793,6 +590,7 @@ void KVFAZIADB::ReadComments()
          }
       }
    }
+   delete fr;
 
 }
 
@@ -800,18 +598,11 @@ void KVFAZIADB::ReadComments()
 void KVFAZIADB::ReadRutherfordCounting()
 {
 
-   if (!strcmp(GetCalibFileName("RutherfordCounting"), "")) {
-      Info("ReadRutherfordCounting()", "No file foud for RutherfordCounting");
+   TEnv* env = GetFileTEnv("ReadRutherfordCounting()", "RutherfordCounting");
+   if (!env)
       return;
-   }
-   TString fp;
-   gDataSet->SearchKVFile(GetCalibFileName("RutherfordCounting"), fp, gDataSet->GetName());
 
-   Info("ReadRutherfordCounting()", "Reading rutherford countings ...");
-
-   TEnv env;
-   env.ReadFile(fp.Data(), kEnvAll);
-   TIter next(env.GetTable());
+   TIter next(env->GetTable());
    TEnvRec* rec = 0;
    KVFAZIADBRun* dbrun = 0;
    while ((rec = (TEnvRec*)next())) {
@@ -819,40 +610,29 @@ void KVFAZIADB::ReadRutherfordCounting()
       dbrun = GetRun(sname.Atoi());
       dbrun->SetRutherfordCount(TString(rec->GetValue()).Atoi());
    }
-
+   delete env;
 }
 
 //__________________________________________________________________________________________________________________
 void KVFAZIADB::ReadRutherfordCrossSection()
 {
-
-   if (!strcmp(GetCalibFileName("RutherfordCrossSection"), "")) {
-      Info("ReadRutherfordCrossSection()", "No file foud for RutherfordCounting");
+   KVFileReader* fr = GetKVFileReader("ReadRutherfordCrossSection()", "RutherfordCrossSection");
+   if (!fr)
       return;
-   }
-   TString fp;
-   gDataSet->SearchKVFile(GetCalibFileName("RutherfordCrossSection"), fp, gDataSet->GetName());
 
-   KVFileReader fr;
-   if (!fr.OpenFileToRead(fp.Data())) {
-      Error("RutherfordCrossSection()", "Error in opening file %s\n", fp.Data());
-      return;
-   }
-
-   Info("RutherfordCrossSection()", "Reading rutherford cross sections ...");
    KVFAZIADBRun* dbrun = 0;
    KVDBSystem* dbsys = 0;
-   while (fr.IsOK()) {
-      fr.ReadLine(":");
-      if (fr.GetCurrentLine().BeginsWith("#")) {
+   while (fr->IsOK()) {
+      fr->ReadLine(":");
+      if (fr->GetCurrentLine().BeginsWith("#")) {
 
-      } else if (fr.GetCurrentLine() == "") {
+      } else if (fr->GetCurrentLine() == "") {
 
       } else {
-         if (fr.GetNparRead() == 2) {
-            dbsys = GetSystem(fr.GetReadPar(0));
+         if (fr->GetNparRead() == 2) {
+            dbsys = GetSystem(fr->GetReadPar(0));
             if (dbsys) {
-               Double_t val = fr.GetDoubleReadPar(1);
+               Double_t val = fr->GetDoubleReadPar(1);
                TIter next(dbsys->GetRuns());
                while ((dbrun = (KVFAZIADBRun*)next())) {
                   dbrun->SetRutherfordCrossSection(val);
@@ -861,7 +641,8 @@ void KVFAZIADB::ReadRutherfordCrossSection()
          }
       }
    }
-   fr.CloseFile();
+   fr->CloseFile();
+   delete fr;
 
 }
 
@@ -869,29 +650,19 @@ void KVFAZIADB::ReadRutherfordCrossSection()
 void KVFAZIADB::ReadCalibrationFiles()
 {
 
-   if (!strcmp(GetCalibFileName("CalibrationFiles"), "")) {
-      Info("ReadCalibrationFiles()", "No file found for CalibrationFiles");
+   KVFileReader* fr = GetKVFileReader("ReadCalibrationFiles()", "CalibrationFiles");
+   if (!fr)
       return;
-   }
-   TString fp;
-   gDataSet->SearchKVFile(GetCalibFileName("CalibrationFiles"), fp, gDataSet->GetName());
 
-
-   KVFileReader fr;
-   if (!fr.OpenFileToRead(fp.Data())) {
-      Error("ReadCalibrationFiles()", "Error in opening file %s\n", fp.Data());
-      return;
-   }
-
-   Info("ReadCalibrationFiles()", "Reading calibration files");
-   while (fr.IsOK()) {
-      fr.ReadLine(0);
-      if (fr.GetCurrentLine().BeginsWith("#") || fr.GetCurrentLine() == "") {}
+   while (fr->IsOK()) {
+      fr->ReadLine(0);
+      if (fr->GetCurrentLine().BeginsWith("#") || fr->GetCurrentLine() == "") {}
       else {
-         ReadCalibFile(fr.GetCurrentLine().Data());
+         ReadCalibFile(fr->GetCurrentLine().Data());
       }
    }
-   fr.CloseFile();
+   fr->CloseFile();
+   delete fr;
 
 }
 //__________________________________________________________________________________________________________________
@@ -923,7 +694,7 @@ void KVFAZIADB::ReadCalibFile(const Char_t* filename)
    TEnvRec* rec = 0;
    KVDBParameterSet* par = 0;
    KVNumberList default_run_list;
-   default_run_list.SetMinMax(GetFirstRun(), GetLastRun());
+   default_run_list.SetMinMax(GetFirstRunNumber(), GetLastRunNumber());
 
    TString ssignal = "";
    TString stype = "";
@@ -964,20 +735,17 @@ void KVFAZIADB::ReadOoODetectors()
 
    //Lit le fichier ou sont listes les dedtecteurs ne marchant plus au cours
    //de la manip
-   TString fp;
-   if (!KVBase::SearchKVFile(GetCalibFileName("OoODet"), fp, fDataSet.Data())) {
-      Warning("ReadOoODetectors", "No file  %s for this dataset", GetCalibFileName("OoODet"));
+   TEnv* env = GetFileTEnv("ReadOoODetectors()", "OoODet");
+   if (!env)
       return;
-   }
-   Info("ReadOoODetectors()", "Read out of order detectors ...");
+
    fOoODets = AddTable("OoO Detectors", "Name of out of order detectors");
 
    KVDBRecord* dbrec = 0;
-   TEnv env;
-   TEnvRec* rec = 0;
-   env.ReadFile(fp.Data(), kEnvAll);
-   TIter it(env.GetTable());
 
+   TEnvRec* rec = 0;
+
+   TIter it(env->GetTable());
    while ((rec = (TEnvRec*)it.Next())) {
       KVString srec(rec->GetName());
       KVNumberList nl(rec->GetValue());
@@ -997,34 +765,7 @@ void KVFAZIADB::ReadOoODetectors()
          LinkRecordToRunRange(dbrec, nl);
       }
    }
-
-}
-//__________________________________________________________________________________________________________________
-
-void KVFAZIADB::PrintRuns(KVNumberList& nl) const
-{
-   // Print compact listing of runs in the number list like this:
-   //
-   // root [9] gFaziaDB->PrintRuns("8100-8120")
-   // RUN     SYSTEM                          TRIGGER         EVENTS          COMMENTS
-   // ------------------------------------------------------------------------------------------------------------------
-   // 8100    129Xe + 58Ni 8 MeV/A            M>=2            968673
-   // 8101    129Xe + 58Ni 8 MeV/A            M>=2            969166
-   // 8102    129Xe + 58Ni 8 MeV/A            M>=2            960772
-   // 8103    129Xe + 58Ni 8 MeV/A            M>=2            970029
-   // 8104    129Xe + 58Ni 8 MeV/A            M>=2            502992          disjonction ht chassis 1
-   // 8105    129Xe + 58Ni 8 MeV/A            M>=2            957015          intensite augmentee a 200 pA
-
-   printf("RUN\tSYSTEM\t\t\t\tTRIGGER\t\tEVENTS\t\tCOMMENTS\n");
-   printf("------------------------------------------------------------------------------------------------------------------\n");
-   nl.Begin();
-   while (!nl.End()) {
-      KVFAZIADBRun* run = GetRun(nl.Next());
-      if (!run) continue;
-      printf("%4d\t%-30s\t%s\t\t%d\t\t%s\n",
-             run->GetNumber(), (run->GetSystem() ? run->GetSystem()->GetName() : "            "), run->GetTriggerString(),
-             run->GetEvents(), run->GetComments());
-   }
+   delete env;
 }
 
 //---------------------------------------

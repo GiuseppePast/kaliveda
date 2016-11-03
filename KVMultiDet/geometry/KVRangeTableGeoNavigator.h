@@ -41,6 +41,12 @@ public:
    virtual void ParticleEntersNewVolume(KVNucleus*);
    virtual void PropagateParticle(KVNucleus*, TVector3* TheOrigin = 0);
 
+   Bool_t CheckIonForRangeTable(Int_t Z, Int_t A)
+   {
+      // Return kTRUE if current range tables can handle ion
+      return fRangeTable->CheckIon(Z, A);
+   }
+
    ClassDef(KVRangeTableGeoNavigator, 0) //Propagate particles through a geometry and calculate their energy losses
 };
 

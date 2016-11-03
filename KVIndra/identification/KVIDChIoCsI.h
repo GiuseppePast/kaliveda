@@ -19,8 +19,14 @@
 #define KVIDChIoCsI_H
 
 #include "KVINDRAIDTelescope.h"
+#include "KVChIo.h"
+#include "KVCsI.h"
 
 class KVIDChIoCsI: public KVINDRAIDTelescope {
+
+protected:
+   KVChIo* fChIo;//!the chio
+   KVCsI* fCsI;//!the csi
 
 public:
 
@@ -37,6 +43,8 @@ public:
       // (protons are difficult to distinguish from pedestal)
       return (Z > 1);
    }
+   Bool_t CheckTheoreticalIdentificationThreshold(KVNucleus* /*ION*/, Double_t /*EINC*/ = 0.0);
+   virtual void Initialize(void);
 
    ClassDef(KVIDChIoCsI, 1)     //INDRA identification using ChIo-CsI matrices
 };

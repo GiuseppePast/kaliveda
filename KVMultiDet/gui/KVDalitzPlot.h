@@ -44,6 +44,8 @@ public:
       return fShowCenter;
    }
 
+   TH1* GetDistanceFromCenter();
+
    ClassDef(KVDalitzPlot, 1) //Fill 3D observables in a dalitz plot
 };
 

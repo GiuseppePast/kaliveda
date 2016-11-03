@@ -14,7 +14,7 @@ class KVSimNucleus : public KVNucleus {
 protected:
    TVector3 position;   // vector position of the particle in fm
    TVector3 angmom;  // angular momentum of the particle in units
-
+   Double_t fDensity;   //density of the nucleus in nuc.fm-3
 public:
 
    KVSimNucleus() : KVNucleus() {}
@@ -31,6 +31,8 @@ public:
 
    void SetPosition(Double_t rx, Double_t ry, Double_t rz);
    void SetPosition(const TVector3&);
+   void SetDensity(Double_t);
+   Double_t GetDensity() const;
    const TVector3* GetPosition() const
    {
       return &position;
@@ -41,6 +43,10 @@ public:
    }
 
    void SetAngMom(Double_t lx, Double_t ly, Double_t lz);
+   void SetSpin(Double_t x, Double_t y, Double_t z)
+   {
+      SetAngMom(x, y, z);
+   }
    const TVector3* GetAngMom() const
    {
       return &angmom;
@@ -49,13 +55,37 @@ public:
    {
       return angmom;
    }
+   TVector3& GetSpin()
+   {
+      return GetAngMom();
+   }
+   Double_t GetRadius() const
+   {
+      // Spherical nuclear radius 1.2*A**(1/3)
+      return 1.2 * pow(GetA(), 1. / 3.);
+   }
+   Double_t GetMomentOfInertia() const
+   {
+      // Moment of inertia for spherical nucleus of radius 1.2*A**(1/3)
+      return 0.4 * GetMass() * pow(GetRadius(), 2);
+   }
+   Double_t GetRotationalEnergy() const
+   {
+      // Rotational energy for spherical nucleus
+      Double_t s = angmom.Mag();
+      return 0.5 * pow(hbar, 2) * (s * (s + 1.)) / GetMomentOfInertia();
+   }
+
    Double_t GetEnergyLoss(const TString& detname) const;
    TVector3 GetEntrancePosition(const TString& detname) const;
    TVector3 GetExitPosition(const TString& detname) const;
 
    void Print(Option_t* t = "") const;
 
-   ClassDef(KVSimNucleus, 3) //Nuclear particle in a simulated event
+   KVSimNucleus operator+(const KVSimNucleus& rhs);
+   KVSimNucleus& operator+=(const KVSimNucleus& rhs);
+
+   ClassDef(KVSimNucleus, 4) //Nuclear particle in a simulated event
 
 };
 

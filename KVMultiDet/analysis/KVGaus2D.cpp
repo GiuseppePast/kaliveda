@@ -18,7 +18,7 @@ ClassImp(KVGaus2D)
 ////////////////////////////////////////////////////////////////////////////////
 
 //________________________________________________________________
-KVGaus2D::KVGaus2D()
+KVGaus2D::KVGaus2D(Bool_t batch) : KVAutoFit(batch)
 {
    // Default constructor
    SetName("Gaus2D");
